@@ -17,119 +17,207 @@ class GlobalPlayerBar extends StatelessWidget {
       builder: (context, snapshot) {
         final state = snapshot.data!;
 
-        // Don't show if player is idle/inactive
         if (state.mode == AudioMode.idle || state.currentSource == null) {
           return const SizedBox.shrink();
         }
 
         final isAdhan = state.mode == AudioMode.adhan;
         final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+        final l10n = AppLocalizations.of(context)!;
 
-        return Card(
-          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          elevation: 6,
-          shadowColor: theme.colorScheme.shadow.withValues(alpha: 0.3),
-          color: theme.colorScheme.surfaceContainerHighest,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: isAdhan 
-                  ? theme.colorScheme.error.withValues(alpha: 0.3) 
-                  : theme.colorScheme.primary.withValues(alpha: 0.1),
-              width: 1.5,
+        // ── العنوان والـ subtitle ──────────────────────────────────
+        final title = state.displayTitle?.isNotEmpty == true
+            ? state.displayTitle!
+            : state.currentSource.toString();
+
+        final subtitleText = isAdhan
+            ? l10n.adhanPrioritySystem
+            : (state.subtitle?.isNotEmpty == true
+                  ? state.subtitle!
+                  : _getModeSubtitle(context, state.mode));
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark
+                  ? theme.colorScheme.surfaceContainerHighest
+                  : theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isAdhan
+                    ? theme.colorScheme.error.withValues(alpha: 0.4)
+                    : theme.colorScheme.primary.withValues(alpha: 0.15),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color:
+                      (isAdhan
+                              ? theme.colorScheme.error
+                              : theme.colorScheme.primary)
+                          .withValues(alpha: 0.1),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    // Visual Indicator / Mode Icon
-                    CircleAvatar(
-                      backgroundColor: isAdhan
-                          ? theme.colorScheme.errorContainer
-                          : theme.colorScheme.primaryContainer,
-                      child: Icon(
-                        _getModeIcon(state.mode),
-                        color: isAdhan
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.primary,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+                  child: Row(
+                    children: [
+                      // ── Mode Icon ──────────────────────────────
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: isAdhan
+                              ? theme.colorScheme.errorContainer
+                              : theme.colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          _getModeIcon(state.mode),
+                          color: isAdhan
+                              ? theme.colorScheme.error
+                              : theme.colorScheme.primary,
+                          size: 22,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    
-                    // Metadata
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(width: 12),
+
+                      // ── Title & Subtitle ───────────────────────────────────────
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'سورة: ',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: isAdhan
+                                          ? theme.colorScheme.error
+                                          : theme.colorScheme.primary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Text(
+                                  isAdhan ? '' : 'القارئ: ',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    subtitleText,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                      fontSize: 11,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ── Lock indicator ─────────────────────────
+                      if (state.isLocked && !isAdhan) ...[
+                        Icon(Icons.lock_clock, color: Colors.orange, size: 18),
+                        const SizedBox(width: 4),
+                      ],
+
+                      // ── Controls ───────────────────────────────
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            state.currentSource.toString(),
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          _buildControlButton(
+                            context: context,
+                            icon: state.isPlaying
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            isAdhan: isAdhan,
+                            size: 32,
+                            enabled: !(state.isLocked && !isAdhan),
+                            onPressed: state.isLocked && !isAdhan
+                                ? null
+                                : () => state.isPlaying
+                                      ? audioService.pause()
+                                      : audioService.resume(),
                           ),
-                          Text(
-                            isAdhan 
-                                ? AppLocalizations.of(context)!.adhanPrioritySystem 
-                                : _getModeSubtitle(context, state.mode),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          _buildControlButton(
+                            context: context,
+                            icon: Icons.stop_rounded,
+                            isAdhan: isAdhan,
+                            size: 24,
+                            useVariant: true,
+                            onPressed: () => audioService.stop(),
                           ),
                         ],
                       ),
-                    ),
-
-                    // Locking / Playing control indicators
-                    if (state.isLocked && !isAdhan) ...[
-                      const Icon(Icons.lock_clock, color: Colors.orange),
-                      const SizedBox(width: 8),
                     ],
-
-                    // Media Controls
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (state.isPlaying)
-                          IconButton(
-                            icon: const Icon(Icons.pause_circle_filled),
-                            iconSize: 36,
-                            color: isAdhan ? theme.colorScheme.error : theme.colorScheme.primary,
-                            onPressed: state.isLocked && !isAdhan ? null : () => audioService.pause(),
-                          )
-                        else
-                          IconButton(
-                            icon: const Icon(Icons.play_circle_filled),
-                            iconSize: 36,
-                            color: isAdhan ? theme.colorScheme.error : theme.colorScheme.primary,
-                            onPressed: state.isLocked && !isAdhan ? null : () => audioService.resume(),
-                          ),
-                        IconButton(
-                          icon: const Icon(Icons.stop_rounded),
-                          iconSize: 28,
-                          color: theme.colorScheme.onSurfaceVariant,
-                          onPressed: () => audioService.stop(),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
-              ),
 
-              // Position Progress indicator (Only for Quran playback)
-              if (state.mode == AudioMode.quran)
-                _QuranProgressBar(audioService: audioService),
-            ],
+                // ── Progress Bar (Quran only) ────────────────────
+                if (state.mode == AudioMode.quran)
+                  _QuranProgressBar(audioService: audioService),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildControlButton({
+    required BuildContext context,
+    required IconData icon,
+    required bool isAdhan,
+    required double size,
+    bool useVariant = false,
+    bool enabled = true,
+    VoidCallback? onPressed,
+  }) {
+    final theme = Theme.of(context);
+    final color = useVariant
+        ? theme.colorScheme.onSurfaceVariant
+        : isAdhan
+        ? theme.colorScheme.error
+        : theme.colorScheme.primary;
+
+    return IconButton(
+      icon: Icon(icon, size: size + 4),
+      color: enabled ? color : color.withValues(alpha: 0.4),
+      onPressed: enabled ? onPressed : null,
+      padding: const EdgeInsets.all(6),
+      constraints: BoxConstraints(minWidth: size + 16, minHeight: size + 16),
     );
   }
 
@@ -161,33 +249,28 @@ class GlobalPlayerBar extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
 class _QuranProgressBar extends StatelessWidget {
   final AudioServiceWrapper audioService;
-
   const _QuranProgressBar({required this.audioService});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return StreamBuilder<Duration?>(
       stream: audioService.durationStream,
       builder: (context, durationSnapshot) {
         final duration = durationSnapshot.data ?? Duration.zero;
-
         return StreamBuilder<Duration>(
           stream: audioService.positionStream,
           builder: (context, positionSnapshot) {
             final position = positionSnapshot.data ?? Duration.zero;
-            
-            // Protect math bounds
             final totalMs = duration.inMilliseconds.toDouble();
             final currentMs = position.inMilliseconds.toDouble();
             double progress = 0.0;
             if (totalMs > 0 && currentMs <= totalMs) {
               progress = currentMs / totalMs;
             }
-
             return Column(
               children: [
                 Padding(
@@ -196,26 +279,34 @@ class _QuranProgressBar extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _formatDuration(position),
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                        _fmt(position),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10,
+                        ),
                       ),
                       Text(
-                        _formatDuration(duration),
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                        _fmt(duration),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 ClipRRect(
                   borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(16),
-                    bottomRight: Radius.circular(16),
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(20),
                   ),
                   child: LinearProgressIndicator(
                     value: progress,
                     minHeight: 4,
-                    backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-                    valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+                    backgroundColor: theme.colorScheme.primary.withValues(
+                      alpha: 0.1,
+                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      theme.colorScheme.primary,
+                    ),
                   ),
                 ),
               ],
@@ -226,10 +317,8 @@ class _QuranProgressBar extends StatelessWidget {
     );
   }
 
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    return '$minutes:$seconds';
+  String _fmt(Duration d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.inMinutes.remainder(60))}:${two(d.inSeconds.remainder(60))}';
   }
 }

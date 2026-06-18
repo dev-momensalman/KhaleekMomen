@@ -103,7 +103,8 @@ class _MyAppState extends State<MyApp> {
       HttpService(baseUrl: 'https://api.aladhan.com/v1'),
       _storageService!,
     );
-    _radioService = RadioService(_httpService!);
+    // ✅ بعد
+    _radioService = RadioService();
     _quranService = QuranService(_httpService!);
     _azkarService = AzkarService();
     _adhanScheduler = AdhanScheduler(_audioService!, _storageService!);

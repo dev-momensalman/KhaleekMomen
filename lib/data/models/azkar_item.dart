@@ -1,10 +1,13 @@
+// lib/data/models/azkar_item.dart
+
 class AzkarItem {
   final String id;
   final String category;
   final String text;
   final String translation;
-  final int count; // Target repetition count (e.g. 3, 33, 100)
-  final String? audioUrl; // Optional audio play link
+  final int count;
+  final String? source;
+  final String? audioUrl;
 
   AzkarItem({
     required this.id,
@@ -12,30 +15,9 @@ class AzkarItem {
     required this.text,
     required this.translation,
     required this.count,
+    this.source,
     this.audioUrl,
   });
-
-  factory AzkarItem.fromJson(Map<String, dynamic> json) {
-    return AzkarItem(
-      id: json['id']?.toString() ?? '',
-      category: json['category']?.toString() ?? '',
-      text: json['text']?.toString() ?? '',
-      translation: json['translation']?.toString() ?? '',
-      count: json['count'] as int? ?? 1,
-      audioUrl: json['audioUrl']?.toString(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'category': category,
-      'text': text,
-      'translation': translation,
-      'count': count,
-      'audioUrl': audioUrl,
-    };
-  }
 
   @override
   bool operator ==(Object other) =>

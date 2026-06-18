@@ -12,7 +12,10 @@ class StorageService {
       await Hive.initFlutter();
       _box = await Hive.openBox(_boxName);
       _isInitialized = true;
-      developer.log('Storage Service (Hive) initialized.', name: 'StorageService');
+      developer.log(
+        'Storage Service (Hive) initialized.',
+        name: 'StorageService',
+      );
     } catch (e) {
       developer.log('Error initializing Hive: \$e', name: 'StorageService');
       rethrow;
@@ -37,7 +40,7 @@ class StorageService {
   }
 
   // Helper getters/setters for specific features
-  
+
   // Favorites
   List<String> getFavoriteStations() {
     final list = get('fav_stations');
@@ -143,11 +146,13 @@ class StorageService {
     required int surahNumber,
     required int ayahNumber,
     required String surahName,
+    double scrollOffset = 0.0, // ← جديد
   }) async {
-    await put('last_reading_position', {
+    await _box.put('last_reading_position', {
       'surahNumber': surahNumber,
       'ayahNumber': ayahNumber,
       'surahName': surahName,
+      'scrollOffset': scrollOffset, // ← جديد
       'timestamp': DateTime.now().toIso8601String(),
     });
   }

@@ -60,24 +60,27 @@ class QuranController extends ChangeNotifier {
     _lastReadingPosition = _storageService.getLastReadingPosition();
   }
 
-  Future<void> saveReadingPosition({
-    required int surahNumber,
-    required int ayahNumber,
-    required String surahName,
-  }) async {
-    await _storageService.saveLastReadingPosition(
-      surahNumber: surahNumber,
-      ayahNumber: ayahNumber,
-      surahName: surahName,
-    );
-    _lastReadingPosition = {
-      'surahNumber': surahNumber,
-      'ayahNumber': ayahNumber,
-      'surahName': surahName,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-    notifyListeners();
-  }
+Future<void> saveReadingPosition({
+  required int surahNumber,
+  required int ayahNumber,
+  required String surahName,
+  double scrollOffset = 0.0,   // ← جديد
+}) async {
+  await _storageService.saveLastReadingPosition(
+    surahNumber: surahNumber,
+    ayahNumber: ayahNumber,
+    surahName: surahName,
+    scrollOffset: scrollOffset, // ← جديد
+  );
+  _lastReadingPosition = {
+    'surahNumber': surahNumber,
+    'ayahNumber': ayahNumber,
+    'surahName': surahName,
+    'scrollOffset': scrollOffset, // ← جديد
+    'timestamp': DateTime.now().toIso8601String(),
+  };
+  notifyListeners();
+}
 
   Future<void> clearReadingPosition() async {
     await _storageService.clearLastReadingPosition();

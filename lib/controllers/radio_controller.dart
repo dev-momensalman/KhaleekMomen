@@ -1,3 +1,5 @@
+// lib/controllers/radio_controller.dart
+
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
@@ -29,7 +31,7 @@ class RadioController extends ChangeNotifier {
     });
   }
 
-  // Getters
+  // ── Getters ─────────────────────────────────────────────────────
   List<Station> get stations => _stations;
   List<String> get favoriteStationIds => _favoriteStationIds;
   bool get isLoading => _isLoading;
@@ -47,18 +49,43 @@ class RadioController extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
-
     try {
       _stations = await _radioService.getStations();
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception:', '').trim();
-      developer.log('Error fetching radio stations: $_errorMessage', name: 'RadioController');
+      developer.log(
+        'Error fetching radio stations: $_errorMessage',
+        name: 'RadioController',
+      );
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
+
+  // ── Active station getters ──────────────────────────────────────
+
+  /// Returns the currently active/playing station, or null if none.
+  Station? get activeStation {
+    final state = _audioService.currentState;
+    if (state.mode != AudioMode.radio || state.currentSource == null) {
+      return null;
+    }
+    try {
+      return _stations.firstWhere((s) => s.name == state.currentSource);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// True if any radio station is currently playing.
+  bool get isAnyPlaying {
+    final state = _audioService.currentState;
+    return state.mode == AudioMode.radio && state.isPlaying;
+  }
+
+  // ── Favorites ───────────────────────────────────────────────────
 
   bool isFavorite(Station station) {
     return _favoriteStationIds.contains(station.id);
@@ -74,7 +101,8 @@ class RadioController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Audio Playback Actions
+  // ── Audio Playback ──────────────────────────────────────────────
+
   bool isStationPlaying(Station station) {
     final state = _audioService.currentState;
     return state.mode == AudioMode.radio &&
@@ -95,8 +123,6 @@ class RadioController extends ChangeNotifier {
         title: station.name,
         subtitle: station.country,
       );
-      
-      // Save last played state
       await _storageService.setLastPlayedAudio({
         'type': 'radio',
         'id': station.id,
@@ -105,7 +131,10 @@ class RadioController extends ChangeNotifier {
         'url': station.streamUrl,
       });
     } catch (e) {
-      developer.log('Failed to play radio station: $e', name: 'RadioController');
+      developer.log(
+        'Failed to play radio station: $e',
+        name: 'RadioController',
+      );
       rethrow;
     }
   }

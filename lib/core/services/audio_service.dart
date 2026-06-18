@@ -228,12 +228,13 @@ class AudioServiceWrapper {
       AudioState(
         mode: targetMode,
         isPlaying: false,
-        currentSource: title, // stable ID for UI comparison
+        currentSource: title,
         previousSource: currentState.currentSource,
         isLocked: false,
+        displayTitle: displayTitle ?? title, // ← اسم السورة بالعربي
+        subtitle: subtitle, // ← اسم القارئ
       ),
     );
-
     final startGen = _generation;
 
     try {
@@ -291,6 +292,8 @@ class AudioServiceWrapper {
         isLocked: true,
         previousSource: currentState.currentSource,
         currentSource: title,
+        displayTitle: displayTitle ?? title, // ← اسم الأذان
+        subtitle: subtitle, // ← اسم الصلاة
       ),
     );
 

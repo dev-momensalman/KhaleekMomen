@@ -1,3 +1,5 @@
+// test/widget_test.dart
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:islamic_audio_hub/core/services/http_service.dart';
@@ -16,10 +18,8 @@ class FakeHttpService extends HttpService {
   final Map<String, dynamic>? mockResponse;
   final bool shouldThrow;
 
-  FakeHttpService({
-    this.mockResponse,
-    this.shouldThrow = false,
-  }) : super(baseUrl: 'https://api.aladhan.com/v1');
+  FakeHttpService({this.mockResponse, this.shouldThrow = false})
+    : super(baseUrl: 'https://api.aladhan.com/v1');
 
   @override
   Future<dynamic> get(String path, {Map<String, String>? headers}) async {
@@ -56,8 +56,9 @@ class FakeStorageService extends StorageService {
 
 class FakeAudioServiceWrapper extends AudioServiceWrapper {
   AudioState _fakeState = const AudioState();
-  final BehaviorSubject<AudioState> _fakeStateSubject =
-      BehaviorSubject<AudioState>.seeded(const AudioState());
+  final BehaviorSubject<AudioState> _fakeStateSubject = BehaviorSubject.seeded(
+    const AudioState(),
+  );
 
   @override
   AudioState get currentState => _fakeState;
@@ -74,6 +75,7 @@ class FakeAudioServiceWrapper extends AudioServiceWrapper {
     AudioMode targetMode, {
     required String title,
     required String subtitle,
+    String? displayTitle, // ✅ FIX: added missing optional param
   }) async {
     playedUrls.add(url);
     _fakeState = AudioState(
@@ -97,7 +99,6 @@ class FakeAudioServiceWrapper extends AudioServiceWrapper {
     _fakeStateSubject.add(_fakeState);
   }
 }
-
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -157,80 +158,92 @@ void main() {
       fakeStorage = FakeStorageService();
     });
 
-    test('getPrayerTimes returns valid timings from API and caches them', () async {
-      final mockApiResponse = {
-        'data': {
-          'timings': {
-            'Fajr': '04:12',
-            'Sunrise': '05:40',
-            'Dhuhr': '12:15',
-            'Asr': '15:35',
-            'Sunset': '19:05',
-            'Maghrib': '19:07',
-            'Isha': '20:37',
-            'Imsak': '04:02',
-            'Midnight': '00:15',
-            'Firstthird': '22:45',
-            'Lastthird': '01:45'
+    test(
+      'getPrayerTimes returns valid timings from API and caches them',
+      () async {
+        final mockApiResponse = {
+          'data': {
+            'timings': {
+              'Fajr': '04:12',
+              'Sunrise': '05:40',
+              'Dhuhr': '12:15',
+              'Asr': '15:35',
+              'Sunset': '19:05',
+              'Maghrib': '19:07',
+              'Isha': '20:37',
+              'Imsak': '04:02',
+              'Midnight': '00:15',
+              'Firstthird': '22:45',
+              'Lastthird': '01:45',
+            },
+            'meta': {'timezone': 'Asia/Riyadh'},
           },
-          'meta': {
-            'timezone': 'Asia/Riyadh',
-          }
-        }
-      };
+        };
 
-      final fakeHttp = FakeHttpService(mockResponse: mockApiResponse);
-      final service = PrayerService(fakeHttp, fakeStorage);
+        final fakeHttp = FakeHttpService(mockResponse: mockApiResponse);
+        final service = PrayerService(fakeHttp, fakeStorage);
 
-      final result = await service.getPrayerTimes(latitude: 21.4, longitude: 39.8);
+        final result = await service.getPrayerTimes(
+          latitude: 21.4,
+          longitude: 39.8,
+        );
 
-      expect(result.fajr, '04:12');
-      expect(result.dhuhr, '12:15');
-      expect(result.timezone, 'Asia/Riyadh');
+        expect(result.fajr, '04:12');
+        expect(result.dhuhr, '12:15');
+        expect(result.timezone, 'Asia/Riyadh');
 
-      // Check if it got cached correctly
-      final cachedJson = fakeStorage.get('cached_prayer_times');
-      expect(cachedJson, isNotNull);
-      expect(cachedJson['fajr'], '04:12');
-    });
+        // Check if it got cached correctly
+        final cachedJson = fakeStorage.get('cached_prayer_times');
+        expect(cachedJson, isNotNull);
+        expect(cachedJson['fajr'], '04:12');
+      },
+    );
 
-    test('getPrayerTimes falls back to valid today cache if API call fails', () async {
-      // Force network error
-      final fakeHttp = FakeHttpService(shouldThrow: true);
-      final service = PrayerService(fakeHttp, fakeStorage);
+    test(
+      'getPrayerTimes falls back to valid today cache if API call fails',
+      () async {
+        // Force network error
+        final fakeHttp = FakeHttpService(shouldThrow: true);
+        final service = PrayerService(fakeHttp, fakeStorage);
 
-      // We need to match today's date for fallback cache validation.
-      // Since getDateTimeForPrayer / today date in service uses DateTime.now(),
-      // let's dynamically write cache with today's date format.
-      final now = DateTime.now();
-      final nowFormatted = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        final now = DateTime.now();
+        final nowFormatted =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-      final todayCachedTimes = PrayerTimes(
-        date: nowFormatted,
-        fajr: '04:10',
-        sunrise: '05:40',
-        dhuhr: '12:10',
-        asr: '15:40',
-        maghrib: '19:10',
-        isha: '20:40',
-        timezone: 'Asia/Riyadh',
-      );
-      await fakeStorage.put('cached_prayer_times', todayCachedTimes.toJson());
+        final todayCachedTimes = PrayerTimes(
+          date: nowFormatted,
+          fajr: '04:10',
+          sunrise: '05:40',
+          dhuhr: '12:10',
+          asr: '15:40',
+          maghrib: '19:10',
+          isha: '20:40',
+          timezone: 'Asia/Riyadh',
+        );
+        await fakeStorage.put('cached_prayer_times', todayCachedTimes.toJson());
 
-      final result = await service.getPrayerTimes(latitude: 21.4, longitude: 39.8);
-      expect(result.fajr, '04:10');
-      expect(result.date, nowFormatted);
-    });
+        final result = await service.getPrayerTimes(
+          latitude: 21.4,
+          longitude: 39.8,
+        );
+        expect(result.fajr, '04:10');
+        expect(result.date, nowFormatted);
+      },
+    );
 
-    test('getPrayerTimes throws exception if API fails and cache is invalid/missing', () async {
-      final fakeHttp = FakeHttpService(shouldThrow: true);
-      final service = PrayerService(fakeHttp, fakeStorage);
+    test(
+      'getPrayerTimes throws exception if API fails and cache is invalid/missing',
+      () async {
+        final fakeHttp = FakeHttpService(shouldThrow: true);
+        final service = PrayerService(fakeHttp, fakeStorage);
 
-      expect(
-        () async => await service.getPrayerTimes(latitude: 21.4, longitude: 39.8),
-        throwsA(isA<Exception>()),
-      );
-    });
+        expect(
+          () async =>
+              await service.getPrayerTimes(latitude: 21.4, longitude: 39.8),
+          throwsA(isA<NetworkException>()),
+        );
+      },
+    );
   });
 
   group('AdhanScheduler Tests', () {
@@ -248,63 +261,74 @@ void main() {
       scheduler.dispose();
     });
 
-    test('scheduleNextAdhan with valid future prayers should schedule the first future one', () {
-      final now = DateTime.now();
-      final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      
-      final futureTime = now.add(const Duration(hours: 2));
-      final futureTimeStr = '${futureTime.hour.toString().padLeft(2, '0')}:${futureTime.minute.toString().padLeft(2, '0')}';
-      
-      final prayerTimes = PrayerTimes(
-        date: dateStr,
-        fajr: '00:01', // past
-        sunrise: '00:02', // past
-        dhuhr: futureTimeStr, // future
-        asr: '23:57', // future
-        maghrib: '23:58', // future
-        isha: '23:59', // future
-        timezone: 'UTC',
-      );
+    test(
+      'scheduleNextAdhan with valid future prayers should schedule the first future one',
+      () {
+        final now = DateTime.now();
+        final dateStr =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-      scheduler.scheduleNextAdhan(prayerTimes);
+        final futureTime = now.add(const Duration(hours: 2));
+        final futureTimeStr =
+            '${futureTime.hour.toString().padLeft(2, '0')}:${futureTime.minute.toString().padLeft(2, '0')}';
 
-      expect(scheduler.scheduledPrayerName, 'Dhuhr');
-      expect(scheduler.scheduledTime, isNotNull);
-      expect(scheduler.scheduledTime!.hour, futureTime.hour);
-      expect(scheduler.scheduledTime!.minute, futureTime.minute);
-    });
+        final prayerTimes = PrayerTimes(
+          date: dateStr,
+          fajr: '00:01',
+          sunrise: '00:02',
+          dhuhr: futureTimeStr,
+          asr: '23:57',
+          maghrib: '23:58',
+          isha: '23:59',
+          timezone: 'UTC',
+        );
 
-    test('scheduleNextAdhan when all today\'s prayers have passed should schedule tomorrow\'s Fajr', () {
-      final now = DateTime.now();
-      final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        scheduler.scheduleNextAdhan(prayerTimes);
 
-      final prayerTimes = PrayerTimes(
-        date: dateStr,
-        fajr: '00:01',
-        sunrise: '00:02',
-        dhuhr: '00:03',
-        asr: '00:04',
-        maghrib: '00:05',
-        isha: '00:06',
-        timezone: 'UTC',
-      );
+        expect(scheduler.scheduledPrayerName, 'Dhuhr');
+        expect(scheduler.scheduledTime, isNotNull);
+        expect(scheduler.scheduledTime!.hour, futureTime.hour);
+        expect(scheduler.scheduledTime!.minute, futureTime.minute);
+      },
+    );
 
-      scheduler.scheduleNextAdhan(prayerTimes);
+    test(
+      'scheduleNextAdhan when all today\'s prayers have passed should schedule tomorrow\'s Fajr',
+      () {
+        final now = DateTime.now();
+        final dateStr =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-      expect(scheduler.scheduledPrayerName, 'Fajr');
-      expect(scheduler.scheduledTime, isNotNull);
-      
-      final tomorrow = now.add(const Duration(days: 1));
-      expect(scheduler.scheduledTime!.day, tomorrow.day);
-      expect(scheduler.scheduledTime!.hour, 0);
-      expect(scheduler.scheduledTime!.minute, 1);
-    });
+        final prayerTimes = PrayerTimes(
+          date: dateStr,
+          fajr: '00:01',
+          sunrise: '00:02',
+          dhuhr: '00:03',
+          asr: '00:04',
+          maghrib: '00:05',
+          isha: '00:06',
+          timezone: 'UTC',
+        );
+
+        scheduler.scheduleNextAdhan(prayerTimes);
+
+        expect(scheduler.scheduledPrayerName, 'Fajr');
+        expect(scheduler.scheduledTime, isNotNull);
+
+        final tomorrow = now.add(const Duration(days: 1));
+        expect(scheduler.scheduledTime!.day, tomorrow.day);
+        expect(scheduler.scheduledTime!.hour, 0);
+        expect(scheduler.scheduledTime!.minute, 1);
+      },
+    );
 
     test('AdhanScheduler notifies listeners when scheduled time changes', () {
       final now = DateTime.now();
-      final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final dateStr =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final futureTime = now.add(const Duration(hours: 1));
-      final futureTimeStr = '${futureTime.hour.toString().padLeft(2, '0')}:${futureTime.minute.toString().padLeft(2, '0')}';
+      final futureTimeStr =
+          '${futureTime.hour.toString().padLeft(2, '0')}:${futureTime.minute.toString().padLeft(2, '0')}';
 
       final prayerTimes = PrayerTimes(
         date: dateStr,
@@ -341,72 +365,96 @@ void main() {
       controller = SettingsController(fakeStorage, scheduler, fakeAudio);
     });
 
-    test('AdhanSoundOption.fromFileName matches options or defaults correctly', () {
-      // Default fallback when null/empty
-      expect(AdhanSoundOption.fromFileName(null), AdhanSoundOption.all.first);
-      expect(AdhanSoundOption.fromFileName(''), AdhanSoundOption.all.first);
-      expect(AdhanSoundOption.fromFileName('invalid_file.mp3'), AdhanSoundOption.all.first);
+    test(
+      'AdhanSoundOption.fromFileName matches options or defaults correctly',
+      () {
+        expect(AdhanSoundOption.fromFileName(null), AdhanSoundOption.all.first);
+        expect(AdhanSoundOption.fromFileName(''), AdhanSoundOption.all.first);
+        expect(
+          AdhanSoundOption.fromFileName('invalid_file.mp3'),
+          AdhanSoundOption.all.first,
+        );
 
-      // Matches valid options
-      final secondOption = AdhanSoundOption.all[1];
-      expect(AdhanSoundOption.fromFileName(secondOption.fileName), secondOption);
+        final secondOption = AdhanSoundOption.all[1];
+        expect(
+          AdhanSoundOption.fromFileName(secondOption.fileName),
+          secondOption,
+        );
 
-      // Validate all rawResourceName fields are ASCII-safe (lowercase alphanumeric + underscore)
-      final asciiRegex = RegExp(r'^[a-z0-9_]+$');
-      for (final option in AdhanSoundOption.all) {
-        expect(asciiRegex.hasMatch(option.rawResourceName), isTrue,
-            reason: '${option.rawResourceName} is not a valid Android resource name');
-      }
-    });
+        final asciiRegex = RegExp(r'^[a-z0-9_]+$');
+        for (final option in AdhanSoundOption.all) {
+          expect(
+            asciiRegex.hasMatch(option.rawResourceName),
+            isTrue,
+            reason:
+                '${option.rawResourceName} is not a valid Android resource name',
+          );
+        }
+      },
+    );
 
-    test('SettingsController loads selected adhan sound correctly and updates it', () async {
-      final targetOption = AdhanSoundOption.all[2];
-      
-      // Select adhan
-      await controller.selectAdhan(targetOption);
-      
-      expect(controller.selectedAdhan, targetOption);
-      expect(fakeStorage.getSelectedAdhanSound(), targetOption.fileName);
-    });
+    test(
+      'SettingsController loads selected adhan sound correctly and updates it',
+      () async {
+        final targetOption = AdhanSoundOption.all[2];
 
-    test('SettingsController preview adhan plays and stops audio correctly', () async {
-      final targetOption = AdhanSoundOption.all[3];
+        await controller.selectAdhan(targetOption);
 
-      expect(controller.isPreviewing, isFalse);
-      expect(controller.previewedAdhan, isNull);
-      
-      // Start preview
-      await controller.previewAdhan(targetOption);
-      await Future.delayed(Duration.zero);
-      expect(fakeAudio.playedUrls.last, targetOption.assetPath);
-      expect(fakeAudio.currentState.currentSource, targetOption.displayName);
-      expect(controller.isPreviewing, isTrue);
-      expect(controller.previewedAdhan, targetOption);
+        expect(controller.selectedAdhan, targetOption);
+        expect(fakeStorage.getSelectedAdhanSound(), targetOption.fileName);
+      },
+    );
 
-      // Stop preview
-      controller.stopPreview();
-      await Future.delayed(Duration.zero);
-      expect(fakeAudio.stoppedCalled, isTrue);
-      expect(controller.isPreviewing, isFalse);
-      expect(controller.previewedAdhan, isNull);
-    });
+    test(
+      'SettingsController preview adhan plays and stops audio correctly',
+      () async {
+        final targetOption = AdhanSoundOption.all[3];
 
-    test('SettingsController loads Arabic as default language, and respects saved English preference', () async {
-      // 1. Fresh install scenario: storage is empty.
-      final freshStorage = FakeStorageService();
-      final controllerFresh = SettingsController(freshStorage, scheduler, fakeAudio);
-      expect(controllerFresh.locale.languageCode, 'ar');
+        expect(controller.isPreviewing, isFalse);
+        expect(controller.previewedAdhan, isNull);
 
-      // 2. Existing user scenario: user saved 'en'.
-      final existingStorage = FakeStorageService();
-      await existingStorage.put('language', 'en');
-      final controllerExisting = SettingsController(existingStorage, scheduler, fakeAudio);
-      expect(controllerExisting.locale.languageCode, 'en');
+        await controller.previewAdhan(targetOption);
+        await Future.delayed(Duration.zero);
+        expect(fakeAudio.playedUrls.last, targetOption.assetPath);
+        expect(fakeAudio.currentState.currentSource, targetOption.displayName);
+        expect(controller.isPreviewing, isTrue);
+        expect(controller.previewedAdhan, targetOption);
 
-      // 3. Changing language dynamically updates locale and saves it.
-      await controllerFresh.updateLanguage('en');
-      expect(controllerFresh.locale.languageCode, 'en');
-      expect(freshStorage.getLanguage(), 'en');
-    });
+        controller.stopPreview();
+        await Future.delayed(Duration.zero);
+        expect(fakeAudio.stoppedCalled, isTrue);
+        expect(controller.isPreviewing, isFalse);
+        expect(controller.previewedAdhan, isNull);
+      },
+    );
+
+    test(
+      'SettingsController loads Arabic as default language, and respects saved English preference',
+      () async {
+        // 1. Fresh install: storage is empty
+        final freshStorage = FakeStorageService();
+        final controllerFresh = SettingsController(
+          freshStorage,
+          scheduler,
+          fakeAudio,
+        );
+        expect(controllerFresh.locale.languageCode, 'ar');
+
+        // 2. Existing user: saved 'en'
+        final existingStorage = FakeStorageService();
+        await existingStorage.put('language', 'en');
+        final controllerExisting = SettingsController(
+          existingStorage,
+          scheduler,
+          fakeAudio,
+        );
+        expect(controllerExisting.locale.languageCode, 'en');
+
+        // 3. Changing language dynamically updates locale and saves it
+        await controllerFresh.updateLanguage('en');
+        expect(controllerFresh.locale.languageCode, 'en');
+        expect(freshStorage.getLanguage(), 'en');
+      },
+    );
   });
 }

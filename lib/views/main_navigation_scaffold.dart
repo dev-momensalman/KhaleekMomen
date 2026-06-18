@@ -42,7 +42,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   String _getAppBarTitle(AppLocalizations l10n) {
     switch (_currentIndex) {
       case 0:
-        return l10n.appTitle;
+        return 'أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ'; // ← النص الجديد
       case 1:
         return l10n.nobleQuran;
       case 2:
@@ -103,9 +103,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       body: Stack(
         children: [
           // Current Selected View
-          Positioned.fill(
-            child: _views[_currentIndex],
-          ),
+          Positioned.fill(child: _views[_currentIndex]),
 
           // Global Floating Player Bar
           const Align(
