@@ -5,7 +5,7 @@
 <img src="https://img.shields.io/badge/Material_3-Design-6750A4?style=for-the-badge&logo=materialdesign&logoColor=white" />
 <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" />
 
-# 🕌 Islamic Audio Hub
+# 🕌 KhaleekMomen
 
 ### تطبيق إسلامي متكامل للصوت، الأذان، القرآن الكريم، والأذكار
 
