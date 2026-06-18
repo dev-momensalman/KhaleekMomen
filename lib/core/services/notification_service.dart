@@ -397,8 +397,8 @@ class NotificationService {
 
       await _plugin.zonedSchedule(
         id,
-        'حان وقت صلاة $arabic — الإسلاميك أوديو',
-        'انقر للاستماع إلى الأذان كاملاً',
+        'حان وقت صلاة $arabic — خليك مؤمن',
+        'إِنَّ الصَّلَاةَ كَانَتْ عَلَى الْمُؤْمِنِينَ كِتَابًا مَّوْقُوتًا',
         tzTime,
         NotificationDetails(android: androidDetails, iOS: iOSDetails),
         androidScheduleMode: scheduleMode,
