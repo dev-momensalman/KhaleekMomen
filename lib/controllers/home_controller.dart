@@ -133,14 +133,27 @@ class HomeController extends ChangeNotifier {
       final mode = type == 'radio' ? AudioMode.radio : AudioMode.quran;
       await _audioService.play(url, mode, title: title, subtitle: subtitle);
     } catch (e) {
-      developer.log('Failed to resume last played audio: $e', name: 'HomeController');
+      developer.log(
+        'Failed to resume last played audio: $e',
+        name: 'HomeController',
+      );
     }
   }
 
   bool isLastPlayedPlaying() {
     if (_lastPlayed == null) return false;
     final state = _audioService.currentState;
-    return state.isPlaying && state.currentSource == _lastPlayed!['title'];
+    if (!state.isPlaying) return false;
+
+    final type = _lastPlayed!['type'] as String? ?? '';
+
+    if (type == 'quran') {
+      // مقارنة بالـ id (رقم السورة) — متطابق مع currentSource
+      return state.currentSource == _lastPlayed!['id'];
+    } else {
+      // الراديو: station.name متطابق مع currentSource
+      return state.currentSource == _lastPlayed!['title'];
+    }
   }
 
   @override

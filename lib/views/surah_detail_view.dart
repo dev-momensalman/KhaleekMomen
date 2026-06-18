@@ -19,11 +19,15 @@ class SurahDetailView extends StatefulWidget {
 
 class _SurahDetailViewState extends State<SurahDetailView> {
   late Future<List<Ayah>> _versesFuture;
+  
   final ScrollController _scrollController = ScrollController();
   Timer? _savePositionTimer;
   int _currentVisibleAyah = 1;
   int? _lastReadAyahNumber;
+
   bool _scrolledToLastRead = false;
+final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
+
   List<Ayah> _verses = [];
 
   @override
@@ -68,22 +72,17 @@ class _SurahDetailViewState extends State<SurahDetailView> {
     if (_scrolledToLastRead || _lastReadAyahNumber == null) return;
     _scrolledToLastRead = true;
 
-    final idx = verses.indexWhere((a) => a.number == _lastReadAyahNumber);
-    if (idx <= 0) return;
-
-    // Delay to let ListView render first
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (!mounted || !_scrollController.hasClients) return;
-      final itemHeight = 100.0; // rough estimate per ayah row
-      final offset = (idx * itemHeight).clamp(
-        _scrollController.position.minScrollExtent,
-        _scrollController.position.maxScrollExtent,
-      );
-      _scrollController.animateTo(
-        offset,
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeInOut,
-      );
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      final key = _ayahKeys[_lastReadAyahNumber!];
+      if (key?.currentContext != null) {
+        Scrollable.ensureVisible(
+          key!.currentContext!,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+          alignment: 0.1,
+        );
+      }
     });
   }
 
@@ -114,7 +113,9 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.3,
+                  ),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -128,7 +129,7 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                     backgroundColor: theme.colorScheme.primaryContainer,
                     foregroundColor: theme.colorScheme.primary,
                     child: Text(
-                      '\u06dd${ayah.number}',  // Arabic-Indic end-of-verse mark + number
+                      '\u06dd${ayah.number}', // Arabic-Indic end-of-verse mark + number
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -148,11 +149,15 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                     icon: const Icon(Icons.copy_outlined),
                     tooltip: l10n.copyAyah,
                     onPressed: () {
-                      Clipboard.setData(ClipboardData(text: '${ayah.text}\n\n${ayah.translation}'));
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(l10n.ayahCopied)),
+                      Clipboard.setData(
+                        ClipboardData(
+                          text: '${ayah.text}\n\n${ayah.translation}',
+                        ),
                       );
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(l10n.ayahCopied)));
                     },
                   ),
                 ],
@@ -163,7 +168,9 @@ class _SurahDetailViewState extends State<SurahDetailView> {
             Expanded(
               child: FutureBuilder<List<Ayah>>(
                 future: controller.getAyahTafsir(
-                    widget.surah.number, ayah.number),
+                  widget.surah.number,
+                  ayah.number,
+                ),
                 builder: (context, snapshot) {
                   return ListView(
                     controller: scrollCtrl,
@@ -174,8 +181,9 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primaryContainer
-                              .withValues(alpha: 0.15),
+                          color: theme.colorScheme.primaryContainer.withValues(
+                            alpha: 0.15,
+                          ),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -200,9 +208,9 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                       const SizedBox(height: 6),
                       Text(
                         ayah.translation,
-                        style: theme.textTheme.bodyLarge?.merge(AppTheme.uiTextStyle).copyWith(
-                          height: 1.6,
-                        ),
+                        style: theme.textTheme.bodyLarge
+                            ?.merge(AppTheme.uiTextStyle)
+                            .copyWith(height: 1.6),
                       ),
                       const SizedBox(height: 20),
                       // Tafsir section (loaded async)
@@ -214,13 +222,13 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      if (snapshot.connectionState ==
-                          ConnectionState.waiting)
+                      if (snapshot.connectionState == ConnectionState.waiting)
                         const Center(
-                            child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: CircularProgressIndicator(),
-                        ))
+                          child: Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
                       else if (snapshot.hasError ||
                           snapshot.data == null ||
                           snapshot.data!.isEmpty ||
@@ -295,13 +303,17 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.wifi_off_rounded,
-                        size: 48, color: theme.colorScheme.error),
+                    Icon(
+                      Icons.wifi_off_rounded,
+                      size: 48,
+                      color: theme.colorScheme.error,
+                    ),
                     const SizedBox(height: 12),
                     Text(
                       l10n.networkError,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -319,10 +331,12 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                       onPressed: () {
                         setState(() {
                           final ctrl = Provider.of<QuranController>(
-                              context,
-                              listen: false);
-                          _versesFuture =
-                              ctrl.getSurahVerses(widget.surah.number);
+                            context,
+                            listen: false,
+                          );
+                          _versesFuture = ctrl.getSurahVerses(
+                            widget.surah.number,
+                          );
                         });
                       },
                     ),
@@ -335,14 +349,16 @@ class _SurahDetailViewState extends State<SurahDetailView> {
           final verses = snapshot.data ?? [];
           if (verses.isEmpty) {
             return Center(
-                child: Text(AppLocalizations.of(context)!.noVersesFound));
+              child: Text(AppLocalizations.of(context)!.noVersesFound),
+            );
           }
 
           _verses = verses;
 
           // Auto-scroll to last read position after first render
-          WidgetsBinding.instance
-              .addPostFrameCallback((_) => _scrollToLastRead(verses));
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _scrollToLastRead(verses),
+          );
 
           return Stack(
             children: [
@@ -351,7 +367,10 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                   // Track currently visible ayah by estimating from offset
                   if (_scrollController.hasClients) {
                     final offset = _scrollController.offset;
-                    final idx = (offset / 100).floor().clamp(0, verses.length - 1);
+                    final idx = (offset / 100).floor().clamp(
+                      0,
+                      verses.length - 1,
+                    );
                     _currentVisibleAyah = verses[idx].number;
                   }
                   return false;
@@ -360,31 +379,37 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                   controller: _scrollController,
                   itemCount: verses.length,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-                  separatorBuilder: (context, index) => Divider(
-                    color: theme.dividerColor.withValues(alpha: 0.1),
-                  ),
+                  separatorBuilder: (context, index) =>
+                      Divider(color: theme.dividerColor.withValues(alpha: 0.1)),
                   itemBuilder: (context, index) {
                     final ayah = verses[index];
-                    final isLastRead =
-                        ayah.number == _lastReadAyahNumber;
+                    final isLastRead = ayah.number == _lastReadAyahNumber;
+
+                   final itemKey = _ayahKeys.putIfAbsent(ayah.number, () => GlobalKey<State<StatefulWidget>>());
 
                     return InkWell(
+                      key: itemKey, // ← أضف هنا فقط
                       borderRadius: BorderRadius.circular(12),
                       onTap: () => _showTafsirSheet(context, ayah),
+                      // ... باقي الكود بدون تغيير
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
                         padding: const EdgeInsets.symmetric(
-                            vertical: 12, horizontal: 8),
+                          vertical: 12,
+                          horizontal: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: isLastRead
-                              ? theme.colorScheme.tertiaryContainer
-                                  .withValues(alpha: 0.35)
+                              ? theme.colorScheme.tertiaryContainer.withValues(
+                                  alpha: 0.35,
+                                )
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
                           border: isLastRead
                               ? Border.all(
-                                  color: theme.colorScheme.tertiary
-                                      .withValues(alpha: 0.5),
+                                  color: theme.colorScheme.tertiary.withValues(
+                                    alpha: 0.5,
+                                  ),
                                   width: 1,
                                 )
                               : null,
@@ -394,12 +419,13 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                           children: [
                             // Ayah number + bookmark indicator
                             Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 3),
+                                    horizontal: 10,
+                                    vertical: 3,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: theme.colorScheme.primaryContainer
                                         .withValues(alpha: 0.6),
@@ -407,8 +433,7 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                                   ),
                                   child: Text(
                                     '\u06dd${ayah.number}',
-                                    style: theme.textTheme.bodySmall
-                                        ?.copyWith(
+                                    style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.primary,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -418,8 +443,7 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                                   Chip(
                                     label: Text(
                                       l10n.lastReadLabel,
-                                      style:
-                                          theme.textTheme.labelSmall,
+                                      style: theme.textTheme.labelSmall,
                                     ),
                                     avatar: Icon(
                                       Icons.bookmark_rounded,
@@ -427,10 +451,10 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                                       color: theme.colorScheme.tertiary,
                                     ),
                                     padding: EdgeInsets.zero,
-                                    visualDensity:
-                                        VisualDensity.compact,
+                                    visualDensity: VisualDensity.compact,
                                     backgroundColor: theme
-                                        .colorScheme.tertiaryContainer
+                                        .colorScheme
+                                        .tertiaryContainer
                                         .withValues(alpha: 0.5),
                                   ),
                                 // Hint: tap to see tafsir
@@ -438,8 +462,7 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                                   Icon(
                                     Icons.touch_app_outlined,
                                     size: 14,
-                                    color: theme.colorScheme
-                                        .onSurfaceVariant
+                                    color: theme.colorScheme.onSurfaceVariant
                                         .withValues(alpha: 0.35),
                                   ),
                               ],
@@ -459,8 +482,7 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                               style: theme.textTheme.bodyMedium
                                   ?.merge(AppTheme.uiTextStyle)
                                   .copyWith(
-                                    color: theme
-                                        .colorScheme.onSurfaceVariant,
+                                    color: theme.colorScheme.onSurfaceVariant,
                                     height: 1.5,
                                   ),
                               textDirection: TextDirection.ltr,
@@ -479,7 +501,8 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                 child: AnimatedBuilder(
                   animation: _scrollController,
                   builder: (context, child) {
-                    final show = _scrollController.hasClients &&
+                    final show =
+                        _scrollController.hasClients &&
                         _scrollController.offset > 300;
                     return AnimatedOpacity(
                       opacity: show ? 1.0 : 0.0,
@@ -490,13 +513,13 @@ class _SurahDetailViewState extends State<SurahDetailView> {
                               onPressed: () {
                                 _scrollController.animateTo(
                                   0,
-                                  duration:
-                                      const Duration(milliseconds: 500),
+                                  duration: const Duration(milliseconds: 500),
                                   curve: Curves.easeInOut,
                                 );
                               },
-                              child:
-                                  const Icon(Icons.keyboard_arrow_up_rounded),
+                              child: const Icon(
+                                Icons.keyboard_arrow_up_rounded,
+                              ),
                             )
                           : const SizedBox.shrink(),
                     );
@@ -544,16 +567,15 @@ class _SurahDetailViewState extends State<SurahDetailView> {
   void _jumpToAyah(BuildContext ctx, int? ayahNum) {
     Navigator.pop(ctx);
     if (ayahNum == null || _verses.isEmpty) return;
-    final idx = _verses.indexWhere((a) => a.number == ayahNum);
-    if (idx < 0) return;
-    final offset = (idx * 100.0).clamp(
-      _scrollController.position.minScrollExtent,
-      _scrollController.position.maxScrollExtent,
-    );
-    _scrollController.animateTo(
-      offset,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeInOut,
-    );
+
+    final key = _ayahKeys[ayahNum];
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+        alignment: 0.1,
+      );
+    }
   }
 }

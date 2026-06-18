@@ -99,14 +99,18 @@ class QuranController extends ChangeNotifier {
         final lastReciterId = _storageService.get('last_reciter_id');
         final savedReciter = _reciters.firstWhere(
           (r) => r.id == lastReciterId,
-          orElse: () => _reciters.first, // safe: _reciters.isNotEmpty checked above
+          orElse: () =>
+              _reciters.first, // safe: _reciters.isNotEmpty checked above
         );
         selectReciter(savedReciter);
       }
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception:', '').trim();
-      developer.log('Error initializing QuranController: \$_errorMessage', name: 'QuranController');
+      developer.log(
+        'Error initializing QuranController: \$_errorMessage',
+        name: 'QuranController',
+      );
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -166,12 +170,12 @@ class QuranController extends ChangeNotifier {
       await _audioService.play(
         surah.audioUrl!,
         AudioMode.quran,
-        title: surah.number.toString(),  // use number as stable ID
+        title: surah.number.toString(), // use number as stable ID
         subtitle: _selectedReciter!.name,
       );
       await _storageService.setLastPlayedAudio({
         'type': 'quran',
-        'id': surah.number.toString(),
+        'id': surah.number.toString(), // ← أضف هذا السطر فقط
         'reciterId': _selectedReciter!.id,
         'title': surah.englishName,
         'subtitle': _selectedReciter!.name,
