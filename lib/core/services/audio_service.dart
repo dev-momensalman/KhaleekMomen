@@ -24,7 +24,6 @@ class IslamicAudioHandler extends BaseAudioHandler {
   @override
   Future<void> seek(Duration position) => _player.seek(position);
 
-  // FIX #1: 30s timeout for network, 5s for local assets
   Future<void> setSource(String url, MediaItem mediaItem) async {
     this.mediaItem.add(mediaItem);
     final uri = Uri.parse(url);
@@ -209,11 +208,15 @@ class AudioServiceWrapper {
     );
   }
 
+  // BUG FIX #3: Added optional [displayTitle] — used for MediaItem.title
+  // (shown in the media notification / lock screen control).
+  // [title] remains the stable currentSource identifier (e.g. surah number).
   Future<void> _playNow(
     String url,
     AudioMode targetMode, {
     required String title,
     required String subtitle,
+    String? displayTitle,
   }) async {
     if (!isAvailable) return;
 
@@ -225,7 +228,7 @@ class AudioServiceWrapper {
       AudioState(
         mode: targetMode,
         isPlaying: false,
-        currentSource: title,
+        currentSource: title, // stable ID for UI comparison
         previousSource: currentState.currentSource,
         isLocked: false,
       ),
@@ -234,7 +237,13 @@ class AudioServiceWrapper {
     final startGen = _generation;
 
     try {
-      final mediaItem = MediaItem(id: url, album: subtitle, title: title);
+      // BUG FIX #3: Use displayTitle for what shows in the media notification.
+      // Falls back to title if displayTitle is not provided.
+      final mediaItem = MediaItem(
+        id: url,
+        album: subtitle,
+        title: displayTitle ?? title,
+      );
       await _handler!.setSource(url, mediaItem);
 
       if (_generation != startGen || _isDisposed) return;
@@ -259,12 +268,13 @@ class AudioServiceWrapper {
     }
   }
 
-  // FIX #2: Rethrow so adhan_scheduler can try the fallback URL
+  // BUG FIX #3: Added optional [displayTitle] for MediaItem.title.
   Future<void> _triggerAdhanNow(
     String url,
     String title,
-    String subtitle,
-  ) async {
+    String subtitle, {
+    String? displayTitle,
+  }) async {
     if (!isAvailable) return;
 
     _generation++;
@@ -285,7 +295,11 @@ class AudioServiceWrapper {
     );
 
     try {
-      final mediaItem = MediaItem(id: url, album: subtitle, title: title);
+      final mediaItem = MediaItem(
+        id: url,
+        album: subtitle,
+        title: displayTitle ?? title, // BUG FIX #3
+      );
       await _handler!.setSource(url, mediaItem);
       _handler!.play();
     } catch (e) {
@@ -301,11 +315,13 @@ class AudioServiceWrapper {
     }
   }
 
+  // BUG FIX #3: Added optional [displayTitle] parameter.
   Future<void> play(
     String url,
     AudioMode targetMode, {
     required String title,
     required String subtitle,
+    String? displayTitle,
   }) {
     if (!isAvailable) {
       return Future.error(AudioServiceException(AudioError.serviceUnavailable));
@@ -314,7 +330,7 @@ class AudioServiceWrapper {
       return Future.error(Exception('Audio locked during Adhan.'));
     }
     if (targetMode == AudioMode.adhan) {
-      return _triggerAdhanNow(url, title, subtitle);
+      return _triggerAdhanNow(url, title, subtitle, displayTitle: displayTitle);
     }
 
     final now = DateTime.now();
@@ -328,16 +344,24 @@ class AudioServiceWrapper {
 
     final gen = _generation;
     return _enqueue(
-      () => _playNow(url, targetMode, title: title, subtitle: subtitle),
+      () => _playNow(
+        url,
+        targetMode,
+        title: title,
+        subtitle: subtitle,
+        displayTitle: displayTitle, // BUG FIX #3: pass through
+      ),
       generation: gen,
     );
   }
 
   Future<void> pause() {
-    if (!isAvailable)
+    if (!isAvailable) {
       return Future.error(AudioServiceException(AudioError.serviceUnavailable));
-    if (currentState.isLocked && currentState.mode != AudioMode.adhan)
+    }
+    if (currentState.isLocked && currentState.mode != AudioMode.adhan) {
       return Future.value();
+    }
     final gen = _generation;
     return _enqueue(() async {
       if (!isAvailable) return;
@@ -348,10 +372,12 @@ class AudioServiceWrapper {
   }
 
   Future<void> resume() {
-    if (!isAvailable)
+    if (!isAvailable) {
       return Future.error(AudioServiceException(AudioError.serviceUnavailable));
-    if (currentState.isLocked && currentState.mode != AudioMode.adhan)
+    }
+    if (currentState.isLocked && currentState.mode != AudioMode.adhan) {
       return Future.value();
+    }
     final gen = _generation;
     return _enqueue(() async {
       if (!isAvailable) return;
@@ -373,10 +399,18 @@ class AudioServiceWrapper {
     AudioMode targetMode, {
     required String title,
     required String subtitle,
+    String? displayTitle,
   }) {
-    if (!isAvailable)
+    if (!isAvailable) {
       return Future.error(AudioServiceException(AudioError.serviceUnavailable));
-    return play(url, targetMode, title: title, subtitle: subtitle);
+    }
+    return play(
+      url,
+      targetMode,
+      title: title,
+      subtitle: subtitle,
+      displayTitle: displayTitle,
+    );
   }
 
   void _handleAdhanComplete() {
@@ -399,19 +433,6 @@ class AudioServiceWrapper {
     );
   }
 
-  // ── BUG FIX (Round 4 — Adhan focus):
-  // _handlePlaybackError must NOT reset mode/currentSource for Quran/Radio.
-  //
-  // BEFORE (broken):
-  //   Any network error → AudioMode.idle + currentSource = null
-  //   Effect on Adhan: if error fires during adhan setup, state gets cleared
-  //     even when isLocked=true was just set, causing the lock to be lost.
-  //   Effect on Quran/Radio: transient error → player disappears from UI.
-  //
-  // AFTER (fixed):
-  //   Locked (Adhan) error → full reset to idle (adhan lock must always end cleanly)
-  //   Unlocked (Quran/Radio) error → isPlaying=false only, keep mode+source
-  //     so the user sees the surah/station as paused and can retry.
   void _handlePlaybackError() {
     if (!isAvailable) return;
     developer.log(
@@ -423,7 +444,6 @@ class AudioServiceWrapper {
     } catch (_) {}
 
     if (currentState.isLocked) {
-      // Adhan error → reset fully to idle (lock must always be cleared on error)
       _stateSubject.add(
         const AudioState(
           isLocked: false,
@@ -434,8 +454,6 @@ class AudioServiceWrapper {
         ),
       );
     } else {
-      // Quran/Radio error → stop playing but KEEP mode + currentSource
-      // so the UI shows the item as paused (not gone) and the user can retry.
       _stateSubject.add(currentState.copyWith(isPlaying: false));
     }
   }

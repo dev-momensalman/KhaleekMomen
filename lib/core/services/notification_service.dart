@@ -8,30 +8,6 @@ import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 import 'package:islamic_audio_hub/core/services/storage_service.dart';
 import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// NotificationService — OS-level prayer time notification scheduler
-// ─────────────────────────────────────────────────────────────────────────────
-// BUG FIXES APPLIED:
-// #1 tz.setLocalLocation() called with API timezone (e.g. Africa/Cairo)
-//    → Fixes 2-3 hour delay for Egyptian users
-// #2 Channel delete+recreate before each schedule
-//    → Fixes Adhan sound not updating after Settings change
-// #3 fullScreenIntent: true
-//    → Wakes screen like an alarm
-// #4 Next-day scheduling when all today's prayers have passed
-//    → Fixes "no Fajr notification" when app killed after Isha
-// #5 Stale cache date correction
-//    → Fixes 0 notifications when cache is from yesterday
-// #6 (Round 2 + Round 3) Exact alarm fallback: alarmClock → inexact
-//    → alarmClock (AlarmManager.setAlarmClock) ALSO needs SCHEDULE_EXACT_ALARM
-//    → inexact (AlarmManager.set) needs NO special permission
-//    → Fixes silent failure when SCHEDULE_EXACT_ALARM is denied on Android 12+
-// #7 Notification tap handler
-//    → Opens/resumes app when notification is tapped
-// #8 (Round 4) Missing VIBRATE + USE_FULL_SCREEN_INTENT handled at channel level
-//    → Declared in AndroidManifest.xml (see that file fix)
-// ─────────────────────────────────────────────────────────────────────────────
-
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -40,12 +16,12 @@ class NotificationService {
   static bool _initFailed = false;
   static bool _exactAlarmPermissionGranted = false;
 
-  // IDs 101-105 = today, 111-115 = tomorrow fallback
   static const int _fajrId = 101;
   static const int _dhuhrId = 102;
   static const int _asrId = 103;
   static const int _maghribId = 104;
   static const int _ishaId = 105;
+
   static const int _fajrNextId = 111;
   static const int _dhuhrNextId = 112;
   static const int _asrNextId = 113;
@@ -145,13 +121,12 @@ class NotificationService {
   }) async {
     if (!_isInitialized) {
       developer.log(
-        'NotificationService not ready — skipping.',
+        'NotificationService not ready — skipping schedule.',
         name: 'NotificationService',
       );
       return;
     }
 
-    // BUG FIX #1: Set correct local timezone
     final timezoneStr = prayerTimes.timezone.isNotEmpty
         ? prayerTimes.timezone
         : 'Africa/Cairo';
@@ -176,7 +151,6 @@ class NotificationService {
       name: 'NotificationService',
     );
 
-    // BUG FIX #5: Stale cache date correction
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final tomorrowStr = DateFormat(
       'yyyy-MM-dd',
@@ -203,7 +177,6 @@ class NotificationService {
     final channelId = 'prayer_times_channel_$rawResourceName';
     final channelName = 'Prayer Times ($rawResourceName)';
 
-    // BUG FIX #2: Delete + recreate channel for sound change to take effect
     final androidPlugin = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -228,14 +201,14 @@ class NotificationService {
       developer.log('Channel creation error: $e', name: 'NotificationService');
     }
 
-    // BUG FIX #6: Re-check exact alarm permission
     try {
       final canSchedule =
           await androidPlugin?.canScheduleExactNotifications() ?? false;
       _exactAlarmPermissionGranted = canSchedule;
       if (!canSchedule) {
         developer.log(
-          'WARNING: SCHEDULE_EXACT_ALARM not granted — using inexact timing.',
+          'WARNING: SCHEDULE_EXACT_ALARM permission not granted! '
+          'Notifications will use inexact timing (may fire slightly late).',
           name: 'NotificationService',
         );
       }
@@ -267,10 +240,9 @@ class NotificationService {
       if (success) scheduled++;
     }
 
-    // BUG FIX #4: Schedule tomorrow if all today's prayers have passed
     if (scheduled == 0) {
       developer.log(
-        'All today\'s prayers have passed. Scheduling tomorrow as fallback.',
+        'All today\'s prayers have passed. Scheduling tomorrow\'s prayers as fallback.',
         name: 'NotificationService',
       );
       final tomorrowTimes =
@@ -299,7 +271,8 @@ class NotificationService {
         if (success) tScheduled++;
       }
       developer.log(
-        'Scheduled $tScheduled tomorrow prayer notification(s) for $tomorrowStr.',
+        'Scheduled $tScheduled tomorrow prayer notification(s) '
+        'for $tomorrowStr (approximate times from today).',
         name: 'NotificationService',
       );
     } else {
@@ -325,16 +298,9 @@ class NotificationService {
     try {
       final tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
 
-      // ── BUG FIX #6 (Round 2 + Round 3 — CRITICAL):
-      // AndroidScheduleMode.alarmClock uses AlarmManager.setAlarmClock()
-      // which ALSO requires SCHEDULE_EXACT_ALARM on Android 12+.
-      // AndroidScheduleMode.inexact uses AlarmManager.set() which requires
-      // NO special permission and fires within a system-controlled window.
-      // Using alarmClock as fallback caused the same silent PlatformException
-      // that the fallback was meant to prevent.
       final scheduleMode = _exactAlarmPermissionGranted
           ? AndroidScheduleMode.exactAllowWhileIdle
-          : AndroidScheduleMode.inexact; // ← FIXED: was alarmClock (WRONG)
+          : AndroidScheduleMode.inexact;
 
       final androidDetails = AndroidNotificationDetails(
         channelId,
@@ -348,7 +314,6 @@ class NotificationService {
         enableVibration: true,
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
-        // BUG FIX #3: wakes screen. Requires USE_FULL_SCREEN_INTENT in manifest.
         fullScreenIntent: true,
       );
 
@@ -383,6 +348,67 @@ class NotificationService {
         name: 'NotificationService',
       );
       return false;
+    }
+  }
+
+  // ── IMMEDIATE ADHAN NOTIFICATION (BUG FIX #1) ────────────────────────────
+  // Called by AdhanScheduler._triggerAdhan() when the in-process timer fires.
+  // Shows a heads-up banner even when the app is in the foreground.
+
+  static Future<void> showImmediateAdhanNotification(String arabicName) async {
+    if (!_isInitialized) return;
+    try {
+      const channelId = 'adhan_immediate_channel';
+
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+
+      try {
+        await androidPlugin?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            channelId,
+            'إشعار الأذان الفوري',
+            description: 'يظهر عند حلول وقت الصلاة',
+            importance: Importance.max,
+            playSound: false, // الصوت يُشغَّل عبر AudioService
+            enableVibration: true,
+            enableLights: true,
+          ),
+        );
+      } catch (_) {}
+
+      await _plugin.show(
+        200, // ID ثابت — يستبدل الإشعار السابق تلقائياً
+        '🕌 حان وقت صلاة $arabicName',
+        'إِنَّ الصَّلَاةَ كَانَتْ عَلَى الْمُؤْمِنِينَ كِتَابًا مَّوْقُوتًا',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            channelId,
+            'إشعار الأذان الفوري',
+            channelDescription: 'يظهر عند حلول وقت الصلاة',
+            importance: Importance.max,
+            priority: Priority.max,
+            icon: '@mipmap/ic_launcher',
+            playSound: false,
+            enableVibration: true,
+            category: AndroidNotificationCategory.alarm,
+            visibility: NotificationVisibility.public,
+            fullScreenIntent: true,
+          ),
+        ),
+      );
+
+      developer.log(
+        'Immediate adhan notification shown for: $arabicName',
+        name: 'NotificationService',
+      );
+    } catch (e) {
+      developer.log(
+        'Failed to show immediate notification: $e',
+        name: 'NotificationService',
+      );
     }
   }
 

@@ -14,10 +14,8 @@ class HomeController extends ChangeNotifier {
   Timer? _ticker;
   String _countdownText = '--:--:--';
   Map<String, dynamic>? _lastPlayed;
-  StreamSubscription? _audioSubscription;
+  StreamSubscription<AudioState>? _audioSubscription;
 
-  // Clock-drift detection: tracks the last measured remaining seconds so that
-  // the ticker can notice when the wall-clock jumps (manual change / DST).
   int? _previousRemainingSeconds;
 
   HomeController(
@@ -30,7 +28,6 @@ class HomeController extends ChangeNotifier {
       _loadLastPlayed();
       _startCountdownTicker();
 
-      // Listen to changes in audio playback to update last played item on home
       _audioSubscription = _audioService.stateStream.listen((state) {
         if (state.isPlaying) {
           _loadLastPlayed();
@@ -43,7 +40,10 @@ class HomeController extends ChangeNotifier {
   // Getters
   AudioServiceWrapper get audioService => _audioService;
   String get countdownText => _countdownText;
-  String? get nextPrayerName => _adhanScheduler.scheduledPrayerName;
+
+  // BUG FIX #2: Return Arabic prayer name for UI display.
+  String? get nextPrayerName => _adhanScheduler.scheduledPrayerNameArabic;
+
   DateTime? get nextPrayerTime => _adhanScheduler.scheduledTime;
   Map<String, dynamic>? get lastPlayed => _lastPlayed;
 
@@ -63,7 +63,6 @@ class HomeController extends ChangeNotifier {
     final target = _adhanScheduler.scheduledTime;
     if (target == null) {
       _previousRemainingSeconds = null;
-      // FIX: Use Arabic text instead of English 'Unavailable'
       _countdownText = 'غير متاح';
       notifyListeners();
       return;
@@ -80,7 +79,7 @@ class HomeController extends ChangeNotifier {
     final diff = target.difference(now);
     final actualRemaining = diff.inSeconds;
 
-    // ── Clock-drift detection ───────────────────────────────────────────────
+    // Clock-drift detection
     if (_previousRemainingSeconds != null) {
       final expected = _previousRemainingSeconds! - 1;
       final deviation = (actualRemaining - expected).abs();
@@ -106,21 +105,15 @@ class HomeController extends ChangeNotifier {
     if (actualRemaining % 30 == 0) {
       developer.log(
         'Diagnostic Log - [HomeController]:\n'
-        '  - Current Time: $now\n'
-        '  - Next Prayer: ${_adhanScheduler.scheduledPrayerName}\n'
-        '  - Next Prayer Time: $target\n'
-        '  - Countdown Text: $_countdownText',
+        ' - Current Time: $now\n'
+        ' - Next Prayer: ${_adhanScheduler.scheduledPrayerNameArabic} (${_adhanScheduler.scheduledPrayerName})\n'
+        ' - Next Prayer Time: $target\n'
+        ' - Countdown Text: $_countdownText',
         name: 'HomeController',
       );
     }
   }
 
-  // FIX: playLastPlayed now uses 'id' (surah number) as the title parameter
-  // for quran audio, so that currentSource in AudioServiceWrapper matches the
-  // value that isLastPlayedPlaying() compares against.
-  // Previously it used 'title' (english name like "Al-Fatihah") while
-  // isLastPlayedPlaying() compared against 'id' ("1") → mismatch → the play
-  // button on home never reflected the playing state after resuming.
   Future<void> playLastPlayed() async {
     if (_lastPlayed == null) return;
     try {
@@ -130,16 +123,30 @@ class HomeController extends ChangeNotifier {
 
       final mode = type == 'radio' ? AudioMode.radio : AudioMode.quran;
 
-      // For quran: use 'id' (surah number) as the title so currentSource matches
-      // what isLastPlayedPlaying() checks. For radio: 'title' is the station name.
       final String title;
+      final String? displayTitle;
+
       if (type == 'quran') {
+        // Use surah number as stable currentSource ID
         title = _lastPlayed!['id'] as String;
+        // BUG FIX #3: Use stored Arabic name for media control display.
+        // Falls back to English name if Arabic not yet stored (old cache).
+        displayTitle =
+            (_lastPlayed!['arabicName'] as String?) ??
+            (_lastPlayed!['title'] as String?);
       } else {
+        // Radio: station name is both the ID and display title
         title = _lastPlayed!['title'] as String;
+        displayTitle = null;
       }
 
-      await _audioService.play(url, mode, title: title, subtitle: subtitle);
+      await _audioService.play(
+        url,
+        mode,
+        title: title,
+        subtitle: subtitle,
+        displayTitle: displayTitle, // BUG FIX #3
+      );
     } catch (e) {
       developer.log(
         'Failed to resume last played audio: $e',
@@ -156,7 +163,7 @@ class HomeController extends ChangeNotifier {
     final type = _lastPlayed!['type'] as String? ?? '';
 
     if (type == 'quran') {
-      // Compare against 'id' (surah number) — matches currentSource set by playSurah()
+      // Compare against surah number (stable ID set in playSurah)
       return state.currentSource == _lastPlayed!['id'];
     } else {
       // Radio: station.name matches currentSource

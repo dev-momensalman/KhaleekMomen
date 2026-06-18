@@ -22,9 +22,8 @@ class QuranController extends ChangeNotifier {
 
   List<String> _favoriteReciterIds = [];
   List<String> _favoriteSurahIds = [];
-  StreamSubscription? _audioSubscription;
+  StreamSubscription<AudioState>? _audioSubscription;
 
-  // Reading position
   Map<String, dynamic>? _lastReadingPosition;
 
   QuranController(
@@ -50,8 +49,6 @@ class QuranController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   List<String> get favoriteReciterIds => _favoriteReciterIds;
   List<String> get favoriteSurahIds => _favoriteSurahIds;
-
-  /// Last saved reading position. Keys: surahNumber, ayahNumber, surahName, timestamp.
   Map<String, dynamic>? get lastReadingPosition => _lastReadingPosition;
 
   void _loadFavorites() {
@@ -116,8 +113,6 @@ class QuranController extends ChangeNotifier {
     }
   }
 
-  // FIX: Expose retryFetch() publicly so the "Try Again" button in QuranView
-  // can trigger a real API retry instead of just calling selectReciter().
   Future<void> retryFetch() => _loadInitialData();
 
   void selectReciter(Reciter reciter) {
@@ -173,14 +168,19 @@ class QuranController extends ChangeNotifier {
       await _audioService.play(
         surah.audioUrl!,
         AudioMode.quran,
-        title: surah.number.toString(), // stable ID for currentSource
+        title: surah.number
+            .toString(), // stable ID — used for isSurahPlaying() comparison
         subtitle: _selectedReciter!.name,
+        displayTitle:
+            surah.name, // BUG FIX #3: Arabic surah name shown in media control
       );
       await _storageService.setLastPlayedAudio({
         'type': 'quran',
         'id': surah.number.toString(),
         'reciterId': _selectedReciter!.id,
         'title': surah.englishName,
+        'arabicName':
+            surah.name, // BUG FIX #3: store Arabic name for home screen replay
         'subtitle': _selectedReciter!.name,
         'url': surah.audioUrl!,
       });
