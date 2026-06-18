@@ -1,18 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <!--
-        السماح بـ HTTP للسيرفرات المعروفة للراديو الإسلامي.
-        مطلوب على Android 9+ (API 28+) لأن cleartext محظور بالافتراضي.
+        BUG FIX: Added base-config to allow cleartext HTTP for ALL domains.
+        Previously only specific radio domains were listed, causing ExoPlayer
+        to block HTTP streams from unlisted sources (including fallback radio
+        stations). The manifest already sets usesCleartextTraffic="true" but
+        network_security_config takes precedence over that attribute.
     -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Domain-specific configs kept for reference / future tightening -->
     <domain-config cleartextTrafficPermitted="true">
-        <!-- mp3quran.net — المصدر الرئيسي للراديو -->
         <domain includeSubdomains="true">live.mp3quran.net</domain>
-        <!-- إذاعة القرآن الكريم المصرية الرسمية -->
         <domain includeSubdomains="true">misrquran.gov.eg</domain>
         <domain includeSubdomains="true">holyquranradio.com</domain>
-        <!-- RadioJar CDN للبث -->
         <domain includeSubdomains="true">radiojar.com</domain>
-        <!-- احتياطي عام للبث -->
         <domain includeSubdomains="true">stream.zeno.fm</domain>
+        <domain includeSubdomains="true">download.quranicaudio.com</domain>
+        <domain includeSubdomains="true">mp3quran.net</domain>
+        <domain includeSubdomains="true">api.aladhan.com</domain>
+        <domain includeSubdomains="true">api.alquran.cloud</domain>
     </domain-config>
 </network-security-config>

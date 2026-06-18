@@ -12,6 +12,7 @@ import 'package:islamic_audio_hub/core/services/quran_service.dart';
 import 'package:islamic_audio_hub/core/services/azkar_service.dart';
 import 'package:islamic_audio_hub/core/services/adhan_scheduler.dart';
 import 'package:islamic_audio_hub/core/services/notification_service.dart';
+import 'package:islamic_audio_hub/core/services/adhan_work_manager.dart'; // ✅ NEW
 
 // Controllers
 import 'package:islamic_audio_hub/controllers/settings_controller.dart';
@@ -39,7 +40,7 @@ class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  State createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
@@ -63,38 +64,37 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _bootstrap() async {
-    // ── 1. Hive storage (crash-safe) ─────────────────────────────────────────
+    // ── 1. Hive storage ───────────────────────────────────────────────────────
     try {
       await StorageService.init();
     } catch (e) {
-      assert(() {
-        debugPrint('[Boot] Storage init failed: $e');
-        return true;
-      }());
+      debugPrint('[Boot] Storage init failed: $e');
     }
 
-    // ── 2. OS Prayer Notifications (crash-safe) ───────────────────────────────
+    // ── 2. OS Prayer Notifications ────────────────────────────────────────────
     try {
       await NotificationService.init();
       await NotificationService.checkAndRequestBatteryOptimization();
     } catch (e) {
-      assert(() {
-        debugPrint('[Boot] Notification service init failed: $e');
-        return true;
-      }());
+      debugPrint('[Boot] Notification service init failed: $e');
     }
 
-    // ── 3. Background audio engine (crash-safe) ───────────────────────────────
+    // ── 3. Background WorkManager (daily adhan reschedule) ────────────────────
+    // ✅ NEW: يجدد جدولة الأذان كل 12 ساعة حتى لو التطبيق مهجور
+    try {
+      await registerAdhanWorker();
+    } catch (e) {
+      debugPrint('[Boot] WorkManager registration failed: $e');
+    }
+
+    // ── 4. Background audio engine ────────────────────────────────────────────
     try {
       await AudioServiceWrapper.init();
     } catch (e) {
-      assert(() {
-        debugPrint('[Boot] Audio init failed: $e');
-        return true;
-      }());
+      debugPrint('[Boot] Audio init failed: $e');
     }
 
-    // ── 4. Create services AFTER init() has run ───────────────────────────────
+    // ── 5. Create services AFTER init() has run ───────────────────────────────
     _httpService = HttpService(baseUrl: 'https://mp3quran.net');
     _locationService = LocationService();
     _storageService = StorageService();
@@ -139,21 +139,13 @@ class _MyAppState extends State<MyApp> {
 
     return MultiProvider(
       providers: [
-        // ── Services ──────────────────────────────────────────────────────
-        Provider<StorageService>.value(value: storage),
-        Provider<AudioServiceWrapper>.value(value: audio),
-        ChangeNotifierProvider<AdhanScheduler>.value(value: scheduler),
+        Provider.value(value: storage),
+        Provider.value(value: audio),
+        ChangeNotifierProvider.value(value: scheduler),
 
-        // ── Controllers ───────────────────────────────────────────────────
         ChangeNotifierProvider<SettingsController>(
           create: (_) => SettingsController(storage, scheduler, audio),
         ),
-        // FIX: Removed the extra addPostFrameCallback for fetchPrayerTimes
-        // here. PrayerController already calls fetchPrayerTimes() in its own
-        // constructor's addPostFrameCallback. Having two calls caused:
-        //   1. scheduleNextAdhan() to run twice on startup
-        //   2. Notification channel deleted+recreated twice
-        //   3. On Android 12+: exact alarms cancelled between the two deletions
         ChangeNotifierProvider<PrayerController>(
           create: (_) => PrayerController(prayer, location, scheduler),
         ),

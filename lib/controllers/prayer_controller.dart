@@ -24,19 +24,14 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     this._adhanScheduler,
   ) {
     WidgetsBinding.instance.addObserver(this);
-    // Listen to scheduler changes to notify our UI immediately
     _adhanScheduler.addListener(notifyListeners);
-    // Attempt to load cached prayer times immediately on startup
     _loadCachedTimes();
-    // Start periodic day change checking
     _startDayChangeTimer();
-    // Always fetch fresh prayer times on startup (schedules notifications too)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       fetchPrayerTimes();
     });
   }
 
-  // Getters
   PrayerTimes? get todayTimes => _todayTimes;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -49,7 +44,16 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     if (cache != null && cache.isValidChronologically()) {
       _todayTimes = cache;
       _isOfflineUsingCache = !_prayerService.hasValidCacheForToday();
-      unawaited(_adhanScheduler.scheduleNextAdhan(cache));
+
+      // BUG FIX: Defer scheduleNextAdhan to AFTER the first frame.
+      // Calling it synchronously here triggers AdhanScheduler.notifyListeners()
+      // → HomeController._updateCountdown() → HomeController.notifyListeners()
+      // while the widget tree is still being built → "setState() called during build".
+      // addPostFrameCallback guarantees execution after the first layout/paint.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_adhanScheduler.scheduleNextAdhan(cache));
+      });
+
       notifyListeners();
     }
   }
@@ -94,9 +98,7 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// Fetches prayer times from API using the user's location.
-  /// If location is unavailable, it shows an error and attempts cached fallback only if the cache is for today.
-  Future<void> fetchPrayerTimes({bool force = false}) async {
+  Future fetchPrayerTimes({bool force = false}) async {
     final hasValidCache = _prayerService.hasValidCacheForToday();
 
     if (force || !hasValidCache || _todayTimes == null) {
@@ -106,12 +108,10 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     try {
-      // 1. Get Coordinates (throws specific LocationService exceptions if denied/disabled)
       final position = await _locationService.getCurrentLocation();
 
       _isOfflineUsingCache = false;
 
-      // 2. Fetch times (PrayerService handles API -> local cache fallback)
       final times = await _prayerService.getPrayerTimes(
         latitude: position.latitude,
         longitude: position.longitude,
@@ -121,7 +121,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       _todayTimes = times;
       _errorMessage = null;
 
-      // Fetch tomorrow's times in background (non-blocking, for accuracy)
       unawaited(
         _prayerService.getTomorrowPrayerTimes(
           latitude: position.latitude,
@@ -129,7 +128,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
         ),
       );
 
-      // Update scheduler
       unawaited(_adhanScheduler.scheduleNextAdhan(times));
     } on LocationServiceDisabledException catch (e) {
       _errorMessage = (force || _todayTimes == null) ? e.message : null;
@@ -153,20 +151,17 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _handleOfflineOrFailedFetch() {
-    // If we have a valid cache specifically for TODAY, use it.
     if (_prayerService.hasValidCacheForToday()) {
       _todayTimes = _prayerService.getCachedPrayerTimes();
       _isOfflineUsingCache = true;
       unawaited(_adhanScheduler.scheduleNextAdhan(_todayTimes));
     } else {
-      // If we have a cache from any day, use it as fallback rather than cancelling the countdown/Adhans
       final cache = _prayerService.getCachedPrayerTimes();
       if (cache != null) {
         _todayTimes = cache;
         _isOfflineUsingCache = true;
         unawaited(_adhanScheduler.scheduleNextAdhan(cache));
       } else {
-        // Cancel adhan scheduling only if we don't have any cached times at all
         unawaited(_adhanScheduler.scheduleNextAdhan(null));
       }
     }
