@@ -7,6 +7,7 @@ import 'package:islamic_audio_hub/core/services/storage_service.dart';
 import 'package:islamic_audio_hub/data/models/audio_state.dart';
 import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
+import 'package:intl/intl.dart';
 
 class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
   final AudioServiceWrapper _audioService;
@@ -57,9 +58,27 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       // BUG FIX #4: Added missing "storage: _storageService" required parameter
       // (caused compile error after Round-2 DI fix) and added "await" so
       // scheduling errors are not silently swallowed.
+      // Load cached tomorrow times for accurate scheduling
+      PrayerTimes? tomorrowPt;
+      final tomorrowJson = _storageService.get('cached_prayer_times_tomorrow');
+      if (tomorrowJson != null) {
+        try {
+          final tomorrowStr = DateFormat(
+            'yyyy-MM-dd',
+          ).format(DateTime.now().add(const Duration(days: 1)));
+          final cached = PrayerTimes.fromJson(
+            Map<String, dynamic>.from(tomorrowJson),
+          );
+          if (cached.date == tomorrowStr && cached.isValidChronologically()) {
+            tomorrowPt = cached;
+          }
+        } catch (_) {}
+      }
+
       await NotificationService.schedulePrayerNotifications(
         prayerTimes,
         storage: _storageService,
+        tomorrowPrayerTimes: tomorrowPt,
       );
     } else {
       developer.log(
@@ -72,8 +91,8 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Exposed for countdown widgets on the home screen.
-  DateTime? get scheduledTime      => _scheduledTime;
-  String?   get scheduledPrayerName => _scheduledPrayerName;
+  DateTime? get scheduledTime => _scheduledTime;
+  String? get scheduledPrayerName => _scheduledPrayerName;
 
   /// Called by [HomeController] when foreground clock drift is detected
   /// (manual time change or DST flip while the app is active).
@@ -108,7 +127,13 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       // Strip any extra text (like timezone names: "19:00 (EET)")
       final hour = int.parse(timeParts[0].trim().split(' ')[0]);
       final minute = int.parse(timeParts[1].trim().split(' ')[0]);
-      return DateTime(targetDate.year, targetDate.month, targetDate.day, hour, minute);
+      return DateTime(
+        targetDate.year,
+        targetDate.month,
+        targetDate.day,
+        hour,
+        minute,
+      );
     } catch (_) {
       return null;
     }
@@ -119,6 +144,27 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     final today = now;
     final tomorrow = now.add(const Duration(days: 1));
 
+    // Try to get actual tomorrow prayer times from cache for accuracy
+    PrayerTimes tomorrowTimes = prayerTimes; // fallback = today's times
+    final tomorrowCachedJson = _storageService.get(
+      'cached_prayer_times_tomorrow',
+    );
+    if (tomorrowCachedJson != null) {
+      try {
+        final tomorrowStr = DateFormat('yyyy-MM-dd').format(tomorrow);
+        final cached = PrayerTimes.fromJson(
+          Map<String, dynamic>.from(tomorrowCachedJson),
+        );
+        if (cached.date == tomorrowStr && cached.isValidChronologically()) {
+          tomorrowTimes = cached;
+          developer.log(
+            'Using actual tomorrow times for timer.',
+            name: 'AdhanScheduler',
+          );
+        }
+      } catch (_) {}
+    }
+
     final prayers = [
       // Today's prayers
       _PrayerTimeEntry('Fajr', _parseTimeOnDate(today, prayerTimes.fajr)),
@@ -126,17 +172,22 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       _PrayerTimeEntry('Asr', _parseTimeOnDate(today, prayerTimes.asr)),
       _PrayerTimeEntry('Maghrib', _parseTimeOnDate(today, prayerTimes.maghrib)),
       _PrayerTimeEntry('Isha', _parseTimeOnDate(today, prayerTimes.isha)),
-      
-      // Tomorrow's prayers
-      _PrayerTimeEntry('Fajr', _parseTimeOnDate(tomorrow, prayerTimes.fajr)),
-      _PrayerTimeEntry('Dhuhr', _parseTimeOnDate(tomorrow, prayerTimes.dhuhr)),
-      _PrayerTimeEntry('Asr', _parseTimeOnDate(tomorrow, prayerTimes.asr)),
-      _PrayerTimeEntry('Maghrib', _parseTimeOnDate(tomorrow, prayerTimes.maghrib)),
-      _PrayerTimeEntry('Isha', _parseTimeOnDate(tomorrow, prayerTimes.isha)),
-    ];
 
+      // Tomorrow's prayers — using ACTUAL tomorrow times (not approximation)
+      _PrayerTimeEntry('Fajr', _parseTimeOnDate(tomorrow, tomorrowTimes.fajr)),
+      _PrayerTimeEntry(
+        'Dhuhr',
+        _parseTimeOnDate(tomorrow, tomorrowTimes.dhuhr),
+      ),
+      _PrayerTimeEntry('Asr', _parseTimeOnDate(tomorrow, tomorrowTimes.asr)),
+      _PrayerTimeEntry(
+        'Maghrib',
+        _parseTimeOnDate(tomorrow, tomorrowTimes.maghrib),
+      ),
+      _PrayerTimeEntry('Isha', _parseTimeOnDate(tomorrow, tomorrowTimes.isha)),
+    ];
     DateTime? nextPrayerTime;
-    String?   nextPrayerName;
+    String? nextPrayerName;
 
     for (final entry in prayers) {
       final t = entry.time;
@@ -156,7 +207,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    _scheduledTime      = nextPrayerTime;
+    _scheduledTime = nextPrayerTime;
     _scheduledPrayerName = nextPrayerName;
     final duration = nextPrayerTime.difference(now);
 
@@ -196,36 +247,57 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     // Use the local asset path so playback works offline.
     final adhanUrl = selectedOption.assetPath;
 
-    _audioService.play(
-      adhanUrl,
-      AudioMode.adhan,
-      title: 'Adhan ($prayerName)',
-      subtitle: 'Islamic Audio Hub',
-    ).then((_) {
-      developer.log('Adhan playing: ${selectedOption.displayName}', name: 'AdhanScheduler');
-    }).catchError((err) {
-      developer.log('Adhan play failed: $err — retrying with fallback.', name: 'AdhanScheduler');
-      // Fallback to remote stream if local asset fails
-      _audioService.play(
-        _fallbackAdhanUrl,
-        AudioMode.adhan,
-        title: 'Adhan ($prayerName)',
-        subtitle: 'Islamic Audio Hub',
-      ).catchError((e) {
-        developer.log('Fallback adhan also failed: $e', name: 'AdhanScheduler');
-      });
-    }).whenComplete(_rescheduleAfterFired);
+    _audioService
+        .play(
+          adhanUrl,
+          AudioMode.adhan,
+          title: 'Adhan ($prayerName)',
+          subtitle: 'Islamic Audio Hub',
+        )
+        .then((_) {
+          developer.log(
+            'Adhan playing: ${selectedOption.displayName}',
+            name: 'AdhanScheduler',
+          );
+        })
+        .catchError((err) {
+          developer.log(
+            'Adhan play failed: $err — retrying with fallback.',
+            name: 'AdhanScheduler',
+          );
+          // Fallback to remote stream if local asset fails
+          _audioService
+              .play(
+                _fallbackAdhanUrl,
+                AudioMode.adhan,
+                title: 'Adhan ($prayerName)',
+                subtitle: 'Islamic Audio Hub',
+              )
+              .catchError((e) {
+                developer.log(
+                  'Fallback adhan also failed: $e',
+                  name: 'AdhanScheduler',
+                );
+              });
+        })
+        .whenComplete(_rescheduleAfterFired);
   }
 
   void _rescheduleAfterFired() {
-    developer.log('Diagnostic Log - [AdhanScheduler]: Rescheduling after adhan completed or fired.', name: 'AdhanScheduler');
+    developer.log(
+      'Diagnostic Log - [AdhanScheduler]: Rescheduling after adhan completed or fired.',
+      name: 'AdhanScheduler',
+    );
     final cachedJson = _storageService.get('cached_prayer_times');
     if (cachedJson == null) return;
     try {
       final pt = PrayerTimes.fromJson(Map<String, dynamic>.from(cachedJson));
       unawaited(scheduleNextAdhan(pt));
     } catch (e) {
-      developer.log('Error rescheduling after fire: $e', name: 'AdhanScheduler');
+      developer.log(
+        'Error rescheduling after fire: $e',
+        name: 'AdhanScheduler',
+      );
     }
   }
 
@@ -233,8 +305,8 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
   void _cancelTimer() {
     _prayerTimer?.cancel();
-    _prayerTimer       = null;
-    _scheduledTime     = null;
+    _prayerTimer = null;
+    _scheduledTime = null;
     _scheduledPrayerName = null;
   }
 }
@@ -244,4 +316,3 @@ class _PrayerTimeEntry {
   final DateTime? time;
   _PrayerTimeEntry(this.name, this.time);
 }
-

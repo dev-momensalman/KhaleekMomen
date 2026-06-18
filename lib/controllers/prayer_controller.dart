@@ -121,6 +121,14 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       _todayTimes = times;
       _errorMessage = null;
 
+      // Fetch tomorrow's times in background (non-blocking, for accuracy)
+      unawaited(
+        _prayerService.getTomorrowPrayerTimes(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        ),
+      );
+
       // Update scheduler
       unawaited(_adhanScheduler.scheduleNextAdhan(times));
     } on LocationServiceDisabledException catch (e) {

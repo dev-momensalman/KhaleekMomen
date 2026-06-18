@@ -42,25 +42,26 @@ class NotificationService {
 
   // Notification IDs — fixed per prayer so rescheduling replaces old ones.
   // IDs 101-105 = today's prayers, 111-115 = tomorrow's fallback prayers.
-  static const int _fajrId    = 101;
-  static const int _dhuhrId   = 102;
-  static const int _asrId     = 103;
+  static const int _fajrId = 101;
+  static const int _dhuhrId = 102;
+  static const int _asrId = 103;
   static const int _maghribId = 104;
-  static const int _ishaId    = 105;
+  static const int _ishaId = 105;
 
   // Tomorrow fallback IDs (used when all today's prayers have passed)
-  static const int _fajrNextId    = 111;
-  static const int _dhuhrNextId   = 112;
-  static const int _asrNextId     = 113;
+  static const int _fajrNextId = 111;
+  static const int _dhuhrNextId = 112;
+  static const int _asrNextId = 113;
   static const int _maghribNextId = 114;
-  static const int _ishaNextId    = 115;
+  static const int _ishaNextId = 115;
 
-  static const String _channelId   = 'prayer_times_channel';
+  static const String _channelId = 'prayer_times_channel';
   static const String _channelName = 'Prayer Times';
-  static const String _channelDesc = 'Azan notifications for daily prayer times';
+  static const String _channelDesc =
+      'Azan notifications for daily prayer times';
 
   static bool get isInitialized => _isInitialized;
-  static bool get initFailed    => _initFailed;
+  static bool get initFailed => _initFailed;
   static bool get exactAlarmPermissionGranted => _exactAlarmPermissionGranted;
 
   // ── INIT ──────────────────────────────────────────────────────────────────
@@ -77,18 +78,23 @@ class NotificationService {
       // 2. Initialize plugin with notification tap handler
       //    BUG FIX #7: onDidReceiveNotificationResponse opens the app
       //    when the user taps a prayer notification.
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
       const initSettings = InitializationSettings(android: androidSettings);
 
       await _plugin.initialize(
         initSettings,
         onDidReceiveNotificationResponse: _onNotificationTapped,
-        onDidReceiveBackgroundNotificationResponse: _onNotificationTappedBackground,
+        onDidReceiveBackgroundNotificationResponse:
+            _onNotificationTappedBackground,
       );
 
       // 3. Default channel (fallback — per-sound channels created in schedulePrayerNotifications)
-      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
       await androidPlugin?.createNotificationChannel(
         const AndroidNotificationChannel(
@@ -114,7 +120,10 @@ class NotificationService {
       );
 
       _isInitialized = true;
-      developer.log('NotificationService initialized.', name: 'NotificationService');
+      developer.log(
+        'NotificationService initialized.',
+        name: 'NotificationService',
+      );
     } catch (e, st) {
       _initFailed = true;
       developer.log(
@@ -149,12 +158,16 @@ class NotificationService {
 
   // ── SCHEDULE ──────────────────────────────────────────────────────────────
 
-  static Future<void> schedulePrayerNotifications(
+  static Future schedulePrayerNotifications(
     PrayerTimes prayerTimes, {
     required StorageService storage,
+    PrayerTimes? tomorrowPrayerTimes, // ← أضف هذا
   }) async {
     if (!_isInitialized) {
-      developer.log('NotificationService not ready — skipping schedule.', name: 'NotificationService');
+      developer.log(
+        'NotificationService not ready — skipping schedule.',
+        name: 'NotificationService',
+      );
       return;
     }
 
@@ -173,24 +186,37 @@ class NotificationService {
         final offsetMs = DateTime.now().timeZoneOffset.inMilliseconds;
         final match = tz.timeZoneDatabase.locations.values
             .cast<tz.Location?>()
-            .firstWhere((l) => l?.currentTimeZone.offset == offsetMs, orElse: () => null);
+            .firstWhere(
+              (l) => l?.currentTimeZone.offset == offsetMs,
+              orElse: () => null,
+            );
         if (match != null) tz.setLocalLocation(match);
       }
     }
-    developer.log('Timezone set to: ${tz.local.name}', name: 'NotificationService');
+    developer.log(
+      'Timezone set to: ${tz.local.name}',
+      name: 'NotificationService',
+    );
 
     // ── BUG FIX #5: Stale cache date correction ─────────────────────────
     // If prayerTimes.date is yesterday (or older), adjust it to today.
     // getDateTimeForPrayer uses prayerTimes.date, so a stale date means
     // ALL times resolve to the past → 0 notifications scheduled.
-    final todayStr    = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final tomorrowStr = DateFormat('yyyy-MM-dd').format(DateTime.now().add(const Duration(days: 1)));
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final tomorrowStr = DateFormat(
+      'yyyy-MM-dd',
+    ).format(DateTime.now().add(const Duration(days: 1)));
     final effectiveTodayPrayerTimes = prayerTimes.isForToday
         ? prayerTimes
-        : prayerTimes.withDate(todayStr); // approximate: same times, today's date
+        : prayerTimes.withDate(
+            todayStr,
+          ); // approximate: same times, today's date
 
     if (!effectiveTodayPrayerTimes.isValidChronologically()) {
-      developer.log('Invalid prayer times — skipping.', name: 'NotificationService');
+      developer.log(
+        'Invalid prayer times — skipping.',
+        name: 'NotificationService',
+      );
       return;
     }
     // ───────────────────────────────────────────────────────────────────
@@ -203,17 +229,22 @@ class NotificationService {
       savedSound.isEmpty ? null : savedSound,
     );
     final rawResourceName = selectedOption.rawResourceName;
-    final channelId   = 'prayer_times_channel_$rawResourceName';
+    final channelId = 'prayer_times_channel_$rawResourceName';
     final channelName = 'Prayer Times ($rawResourceName)';
 
     // ── BUG FIX #2: Delete + recreate channel so sound change takes effect ──
-    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    try { await androidPlugin?.deleteNotificationChannel(channelId); } catch (_) {}
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    try {
+      await androidPlugin?.deleteNotificationChannel(channelId);
+    } catch (_) {}
     try {
       await androidPlugin?.createNotificationChannel(
         AndroidNotificationChannel(
-          channelId, channelName,
+          channelId,
+          channelName,
           description: _channelDesc,
           importance: Importance.max,
           playSound: true,
@@ -229,7 +260,8 @@ class NotificationService {
     // ── BUG FIX #6: Re-check exact alarm permission before scheduling ──────
     // Permission can be revoked in device Settings at any time.
     try {
-      final canSchedule = await androidPlugin?.canScheduleExactNotifications() ?? false;
+      final canSchedule =
+          await androidPlugin?.canScheduleExactNotifications() ?? false;
       _exactAlarmPermissionGranted = canSchedule;
       if (!canSchedule) {
         developer.log(
@@ -241,11 +273,11 @@ class NotificationService {
     } catch (_) {}
 
     final prayers = [
-      (_fajrId,    'الفجر',  'Fajr',    effectiveTodayPrayerTimes.fajr),
-      (_dhuhrId,   'الظهر',  'Dhuhr',   effectiveTodayPrayerTimes.dhuhr),
-      (_asrId,     'العصر',  'Asr',     effectiveTodayPrayerTimes.asr),
+      (_fajrId, 'الفجر', 'Fajr', effectiveTodayPrayerTimes.fajr),
+      (_dhuhrId, 'الظهر', 'Dhuhr', effectiveTodayPrayerTimes.dhuhr),
+      (_asrId, 'العصر', 'Asr', effectiveTodayPrayerTimes.asr),
       (_maghribId, 'المغرب', 'Maghrib', effectiveTodayPrayerTimes.maghrib),
-      (_ishaId,    'العشاء', 'Isha',    effectiveTodayPrayerTimes.isha),
+      (_ishaId, 'العشاء', 'Isha', effectiveTodayPrayerTimes.isha),
     ];
 
     final now = DateTime.now();
@@ -256,9 +288,13 @@ class NotificationService {
       final prayerDt = effectiveTodayPrayerTimes.getDateTimeForPrayer(timeStr);
       if (prayerDt == null || !prayerDt.isAfter(now)) continue;
       final success = await _scheduleOne(
-        id: id, arabic: arabic, english: english,
-        scheduledTime: prayerDt, channelId: channelId,
-        channelName: channelName, rawResourceName: rawResourceName,
+        id: id,
+        arabic: arabic,
+        english: english,
+        scheduledTime: prayerDt,
+        channelId: channelId,
+        channelName: channelName,
+        rawResourceName: rawResourceName,
       );
       if (success) scheduled++;
     }
@@ -273,22 +309,28 @@ class NotificationService {
         'All today\'s prayers have passed. Scheduling tomorrow\'s prayers as fallback.',
         name: 'NotificationService',
       );
-      final tomorrowTimes = effectiveTodayPrayerTimes.withDate(tomorrowStr);
+      final tomorrowTimes =
+          tomorrowPrayerTimes ??
+          effectiveTodayPrayerTimes.withDate(tomorrowStr);
       final tomorrowPrayers = [
-        (_fajrNextId,    'الفجر',  'Fajr',    tomorrowTimes.fajr),
-        (_dhuhrNextId,   'الظهر',  'Dhuhr',   tomorrowTimes.dhuhr),
-        (_asrNextId,     'العصر',  'Asr',     tomorrowTimes.asr),
+        (_fajrNextId, 'الفجر', 'Fajr', tomorrowTimes.fajr),
+        (_dhuhrNextId, 'الظهر', 'Dhuhr', tomorrowTimes.dhuhr),
+        (_asrNextId, 'العصر', 'Asr', tomorrowTimes.asr),
         (_maghribNextId, 'المغرب', 'Maghrib', tomorrowTimes.maghrib),
-        (_ishaNextId,    'العشاء', 'Isha',    tomorrowTimes.isha),
+        (_ishaNextId, 'العشاء', 'Isha', tomorrowTimes.isha),
       ];
       int tScheduled = 0;
       for (final (id, arabic, english, timeStr) in tomorrowPrayers) {
         final prayerDt = tomorrowTimes.getDateTimeForPrayer(timeStr);
         if (prayerDt == null || !prayerDt.isAfter(now)) continue;
         final success = await _scheduleOne(
-          id: id, arabic: arabic, english: english,
-          scheduledTime: prayerDt, channelId: channelId,
-          channelName: channelName, rawResourceName: rawResourceName,
+          id: id,
+          arabic: arabic,
+          english: english,
+          scheduledTime: prayerDt,
+          channelId: channelId,
+          channelName: channelName,
+          rawResourceName: rawResourceName,
         );
         if (success) tScheduled++;
       }
@@ -326,10 +368,12 @@ class NotificationService {
       // otherwise fall back to inexact (alarmClock) with a warning.
       final scheduleMode = _exactAlarmPermissionGranted
           ? AndroidScheduleMode.exactAllowWhileIdle
-          : AndroidScheduleMode.alarmClock; // alarmClock doesn't need SCHEDULE_EXACT_ALARM
+          : AndroidScheduleMode
+                .alarmClock; // alarmClock doesn't need SCHEDULE_EXACT_ALARM
 
       final androidDetails = AndroidNotificationDetails(
-        channelId, channelName,
+        channelId,
+        channelName,
         channelDescription: _channelDesc,
         importance: Importance.max,
         priority: Priority.max,
@@ -370,7 +414,10 @@ class NotificationService {
       );
       return true;
     } catch (e) {
-      developer.log('Failed to schedule $english: $e', name: 'NotificationService');
+      developer.log(
+        'Failed to schedule $english: $e',
+        name: 'NotificationService',
+      );
       return false;
     }
   }
@@ -380,12 +427,23 @@ class NotificationService {
   static Future<void> cancelAllPrayerNotifications() async {
     try {
       for (final id in [
-        _fajrId, _dhuhrId, _asrId, _maghribId, _ishaId,
-        _fajrNextId, _dhuhrNextId, _asrNextId, _maghribNextId, _ishaNextId,
+        _fajrId,
+        _dhuhrId,
+        _asrId,
+        _maghribId,
+        _ishaId,
+        _fajrNextId,
+        _dhuhrNextId,
+        _asrNextId,
+        _maghribNextId,
+        _ishaNextId,
       ]) {
         await _plugin.cancel(id);
       }
-      developer.log('All prayer notifications cancelled.', name: 'NotificationService');
+      developer.log(
+        'All prayer notifications cancelled.',
+        name: 'NotificationService',
+      );
     } catch (e) {
       developer.log('Error cancelling: $e', name: 'NotificationService');
     }
@@ -405,7 +463,10 @@ class NotificationService {
         name: 'NotificationService',
       );
     } catch (e) {
-      developer.log('Battery optimization error: $e', name: 'NotificationService');
+      developer.log(
+        'Battery optimization error: $e',
+        name: 'NotificationService',
+      );
     }
   }
 }
