@@ -8,6 +8,7 @@ import 'package:islamic_audio_hub/core/services/notification_service.dart';
 import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 import 'package:islamic_audio_hub/data/models/audio_state.dart';
 import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
+import 'package:intl/intl.dart';
 
 class SettingsController extends ChangeNotifier {
   final StorageService _storageService;
@@ -36,12 +37,15 @@ class SettingsController extends ChangeNotifier {
 
   void _listenToAudioState() {
     _audioSubscription = _audioService.stateStream.listen((state) {
-      final isNowPreviewing = state.isPlaying &&
+      final isNowPreviewing =
+          state.isPlaying &&
           state.mode == AudioMode.quran &&
           AdhanSoundOption.all.any((o) => o.displayName == state.currentSource);
 
       final playingAdhan = isNowPreviewing
-          ? AdhanSoundOption.all.firstWhere((o) => o.displayName == state.currentSource)
+          ? AdhanSoundOption.all.firstWhere(
+              (o) => o.displayName == state.currentSource,
+            )
           : null;
 
       if (_isPreviewing != isNowPreviewing || _previewedAdhan != playingAdhan) {
@@ -71,7 +75,9 @@ class SettingsController extends ChangeNotifier {
     _adhanAutoPlay = _storageService.isAdhanAutoPlayEnabled();
 
     final savedFile = _storageService.getSelectedAdhanSound();
-    _selectedAdhan = AdhanSoundOption.fromFileName(savedFile.isEmpty ? null : savedFile);
+    _selectedAdhan = AdhanSoundOption.fromFileName(
+      savedFile.isEmpty ? null : savedFile,
+    );
   }
 
   ThemeMode _parseThemeMode(String theme) {
@@ -91,7 +97,6 @@ class SettingsController extends ChangeNotifier {
     String modeStr = 'system';
     if (mode == ThemeMode.light) modeStr = 'light';
     if (mode == ThemeMode.dark) modeStr = 'dark';
-    
     await _storageService.setThemeMode(modeStr);
     notifyListeners();
   }
@@ -113,10 +118,15 @@ class SettingsController extends ChangeNotifier {
         final cachedJson = _storageService.get('cached_prayer_times');
         if (cachedJson != null) {
           try {
-            final pt = PrayerTimes.fromJson(Map<String, dynamic>.from(cachedJson));
+            final pt = PrayerTimes.fromJson(
+              Map<String, dynamic>.from(cachedJson),
+            );
             unawaited(_adhanScheduler.scheduleNextAdhan(pt));
           } catch (e) {
-            developer.log('Error parsing cached prayer times on toggle enable: $e', name: 'SettingsController');
+            developer.log(
+              'Error parsing cached prayer times on toggle enable: $e',
+              name: 'SettingsController',
+            );
           }
         }
       } else {
@@ -131,35 +141,67 @@ class SettingsController extends ChangeNotifier {
 
   // ── Adhan Sound Methods ───────────────────────────────────────────────────
 
+  // FIX: Also load tomorrow's cached prayer times when rescheduling after
+  // sound change. Without this, if all today's prayers have passed, the
+  // reschedule uses today's times for tomorrow's slots — meaning Fajr
+  // notification tomorrow fires at today's Fajr time (approximate, not exact).
   Future<void> selectAdhan(AdhanSoundOption option) async {
     stopPreview();
     _selectedAdhan = option;
     await _storageService.saveSelectedAdhanSound(option.fileName);
     notifyListeners();
 
-    // Reschedule notifications with the new channel/sound settings
     final cachedJson = _storageService.get('cached_prayer_times');
     if (cachedJson != null) {
       try {
         final pt = PrayerTimes.fromJson(Map<String, dynamic>.from(cachedJson));
-        await NotificationService.schedulePrayerNotifications(pt, storage: _storageService);
+
+        // Load tomorrow's cached times for accurate next-day scheduling
+        PrayerTimes? tomorrowPt;
+        final tomorrowJson = _storageService.get(
+          'cached_prayer_times_tomorrow',
+        );
+        if (tomorrowJson != null) {
+          try {
+            final tomorrowStr = DateFormat(
+              'yyyy-MM-dd',
+            ).format(DateTime.now().add(const Duration(days: 1)));
+            final cached = PrayerTimes.fromJson(
+              Map<String, dynamic>.from(tomorrowJson),
+            );
+            if (cached.date == tomorrowStr && cached.isValidChronologically()) {
+              tomorrowPt = cached;
+            }
+          } catch (_) {}
+        }
+
+        await NotificationService.schedulePrayerNotifications(
+          pt,
+          storage: _storageService,
+          tomorrowPrayerTimes: tomorrowPt, // FIX: was missing
+        );
       } catch (e) {
-        developer.log('Error rescheduling notifications on sound change: $e', name: 'SettingsController');
+        developer.log(
+          'Error rescheduling notifications on sound change: $e',
+          name: 'SettingsController',
+        );
       }
     }
   }
 
   Future<void> previewAdhan(AdhanSoundOption option) async {
-    // Do not start a preview while a real Adhan is locked
     if (_audioService.currentState.isLocked) {
-      developer.log('Preview blocked — real Adhan is active.', name: 'SettingsController');
+      developer.log(
+        'Preview blocked — real Adhan is active.',
+        name: 'SettingsController',
+      );
       return;
     }
     stopPreview();
     try {
       await _audioService.play(
         option.assetPath,
-        AudioMode.quran, // quran mode = interruptible, not locked
+        AudioMode.quran, // interruptible, not locked
         title: option.displayName,
         subtitle: 'معاينة الأذان',
       );

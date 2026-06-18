@@ -43,8 +43,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  // All services are null until _bootstrap() completes.
-  // This ensures they are created AFTER Hive and AudioService are ready.
   HttpService? _httpService;
   LocationService? _locationService;
   StorageService? _storageService;
@@ -61,7 +59,6 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    // Defer ALL heavy work to after the first frame — no IO in initState.
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
@@ -74,7 +71,6 @@ class _MyAppState extends State<MyApp> {
         debugPrint('[Boot] Storage init failed: $e');
         return true;
       }());
-      // Storage failed → app continues, features that need storage will degrade.
     }
 
     // ── 2. OS Prayer Notifications (crash-safe) ───────────────────────────────
@@ -86,7 +82,6 @@ class _MyAppState extends State<MyApp> {
         debugPrint('[Boot] Notification service init failed: $e');
         return true;
       }());
-      // Notification failure is non-fatal — prayer times still show in UI.
     }
 
     // ── 3. Background audio engine (crash-safe) ───────────────────────────────
@@ -97,17 +92,13 @@ class _MyAppState extends State<MyApp> {
         debugPrint('[Boot] Audio init failed: $e');
         return true;
       }());
-      // Audio failed → AudioServiceWrapper.isAvailable will be false.
-      // All audio features degrade gracefully; app does NOT crash.
     }
 
     // ── 4. Create services AFTER init() has run ───────────────────────────────
-    //    AudioServiceWrapper() must be constructed AFTER AudioServiceWrapper.init()
-    //    so that _attachListeners() runs when _handler is already assigned.
     _httpService = HttpService(baseUrl: 'https://mp3quran.net');
     _locationService = LocationService();
     _storageService = StorageService();
-    _audioService = AudioServiceWrapper(); // Listeners attach here ✓
+    _audioService = AudioServiceWrapper();
     _prayerService = PrayerService(
       HttpService(baseUrl: 'https://api.aladhan.com/v1'),
       _storageService!,
@@ -133,13 +124,10 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    // Show a Material 3 splash while services initialise.
     if (_isBootstrapping) return _buildSplash();
 
-    // All services are non-null beyond this point.
     final audio = _audioService!;
     final storage = _storageService!;
     final location = _locationService!;
@@ -157,20 +145,17 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider<AdhanScheduler>.value(value: scheduler),
 
         // ── Controllers ───────────────────────────────────────────────────
-        // Using plain ChangeNotifierProvider for all controllers.
-        // Services are captured via closure — no ProxyProvider type-lookup risk.
         ChangeNotifierProvider<SettingsController>(
           create: (_) => SettingsController(storage, scheduler, audio),
         ),
+        // FIX: Removed the extra addPostFrameCallback for fetchPrayerTimes
+        // here. PrayerController already calls fetchPrayerTimes() in its own
+        // constructor's addPostFrameCallback. Having two calls caused:
+        //   1. scheduleNextAdhan() to run twice on startup
+        //   2. Notification channel deleted+recreated twice
+        //   3. On Android 12+: exact alarms cancelled between the two deletions
         ChangeNotifierProvider<PrayerController>(
-          create: (_) {
-            final ctrl = PrayerController(prayer, location, scheduler);
-            // Initial fetch deferred to avoid doing IO inside provider create.
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              ctrl.fetchPrayerTimes();
-            });
-            return ctrl;
-          },
+          create: (_) => PrayerController(prayer, location, scheduler),
         ),
         ChangeNotifierProvider<RadioController>(
           create: (_) {
@@ -220,7 +205,6 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-  // ── Splash shown while bootstrap runs (Material 3, theme-aware) ────────────
   Widget _buildSplash() {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -233,7 +217,6 @@ class _MyAppState extends State<MyApp> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // أيقونة بسيطة بدل الـ CircularProgressIndicator
               Container(
                 width: 90,
                 height: 90,
@@ -248,7 +231,6 @@ class _MyAppState extends State<MyApp> {
                 ),
               ),
               const SizedBox(height: 24),
-              // اسم التطبيق
               const Text(
                 'خليك مؤمن',
                 style: TextStyle(
@@ -259,7 +241,6 @@ class _MyAppState extends State<MyApp> {
                 ),
               ),
               const SizedBox(height: 8),
-              // شعار صغير
               Text(
                 'استمع • تعلم • تذكر',
                 style: TextStyle(
@@ -269,7 +250,6 @@ class _MyAppState extends State<MyApp> {
                 ),
               ),
               const SizedBox(height: 48),
-              // مؤشر تحميل أخف
               SizedBox(
                 width: 24,
                 height: 24,

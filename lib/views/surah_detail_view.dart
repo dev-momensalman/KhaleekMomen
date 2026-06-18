@@ -19,14 +19,14 @@ class SurahDetailView extends StatefulWidget {
 
 class _SurahDetailViewState extends State<SurahDetailView> {
   late Future<List<Ayah>> _versesFuture;
-  
+
   final ScrollController _scrollController = ScrollController();
   Timer? _savePositionTimer;
   int _currentVisibleAyah = 1;
   int? _lastReadAyahNumber;
 
   bool _scrolledToLastRead = false;
-final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
+  final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
 
   List<Ayah> _verses = [];
 
@@ -36,13 +36,11 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
     final controller = Provider.of<QuranController>(context, listen: false);
     _versesFuture = controller.getSurahVerses(widget.surah.number);
 
-    // Check if there is a saved position for this surah
     final pos = controller.lastReadingPosition;
     if (pos != null && pos['surahNumber'] == widget.surah.number) {
       _lastReadAyahNumber = pos['ayahNumber'] as int?;
     }
 
-    // Listen to scroll for saving reading position
     _scrollController.addListener(_onScroll);
   }
 
@@ -54,7 +52,30 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
     super.dispose();
   }
 
+  // FIX: Replaced inaccurate pixel-based tracking (offset / 100) with
+  // RenderBox-based tracking that finds the first ayah actually visible
+  // on screen. The old approach assumed each ayah was exactly 100px tall,
+  // causing the saved position to be completely wrong for most surahs.
+  void _updateCurrentVisibleAyah() {
+    if (!mounted || _verses.isEmpty) return;
+    for (final ayah in _verses) {
+      final key = _ayahKeys[ayah.number];
+      if (key?.currentContext == null) continue;
+      final renderBox = key!.currentContext!.findRenderObject() as RenderBox?;
+      if (renderBox == null || !renderBox.hasSize) continue;
+      final position = renderBox.localToGlobal(Offset.zero);
+      // First ayah whose bottom edge is still visible below the AppBar (~100px)
+      if (position.dy + renderBox.size.height > 100) {
+        _currentVisibleAyah = ayah.number;
+        return;
+      }
+    }
+  }
+
   void _onScroll() {
+    // Track the first visible ayah accurately using RenderBox
+    _updateCurrentVisibleAyah();
+
     // Debounced save: wait 1 second after user stops scrolling
     _savePositionTimer?.cancel();
     _savePositionTimer = Timer(const Duration(seconds: 1), () {
@@ -86,7 +107,6 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
     });
   }
 
-  // Show Tafsir bottom sheet
   void _showTafsirSheet(BuildContext context, Ayah ayah) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
@@ -106,7 +126,6 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
         builder: (ctx, scrollCtrl) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Handle bar
             Center(
               child: Container(
                 margin: const EdgeInsets.only(top: 12, bottom: 8),
@@ -120,7 +139,6 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
                 ),
               ),
             ),
-            // Header row
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -129,7 +147,7 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
                     backgroundColor: theme.colorScheme.primaryContainer,
                     foregroundColor: theme.colorScheme.primary,
                     child: Text(
-                      '\u06dd${ayah.number}', // Arabic-Indic end-of-verse mark + number
+                      '\u06dd${ayah.number}',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -164,7 +182,6 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
               ),
             ),
             const Divider(height: 16),
-            // Scrollable content
             Expanded(
               child: FutureBuilder<List<Ayah>>(
                 future: controller.getAyahTafsir(
@@ -176,7 +193,6 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
                     controller: scrollCtrl,
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
                     children: [
-                      // Arabic text
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
@@ -197,7 +213,6 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // English translation
                       Text(
                         l10n.translationLabel,
                         style: theme.textTheme.labelLarge?.copyWith(
@@ -213,7 +228,6 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
                             .copyWith(height: 1.6),
                       ),
                       const SizedBox(height: 20),
-                      // Tafsir section (loaded async)
                       Text(
                         l10n.tafsirLabel,
                         style: theme.textTheme.labelLarge?.copyWith(
@@ -232,7 +246,7 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
                       else if (snapshot.hasError ||
                           snapshot.data == null ||
                           snapshot.data!.isEmpty ||
-                          (snapshot.data!.first.tafsir.isEmpty))
+                          snapshot.data!.first.tafsir.isEmpty)
                         Text(
                           l10n.tafsirUnavailable,
                           style: theme.textTheme.bodyMedium?.copyWith(
@@ -281,7 +295,6 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
           style: theme.appBarTheme.titleTextStyle,
         ),
         actions: [
-          // "Jump to ayah" FAB in AppBar
           IconButton(
             icon: const Icon(Icons.format_list_numbered_rounded),
             tooltip: l10n.jumpToAyah,
@@ -355,144 +368,130 @@ final Map<int, GlobalKey<State<StatefulWidget>>> _ayahKeys = {};
 
           _verses = verses;
 
-          // Auto-scroll to last read position after first render
+          // Auto-scroll to last read position once after first render.
+          // Using a flag (_scrolledToLastRead) prevents repeated scrolling
+          // on every rebuild.
           WidgetsBinding.instance.addPostFrameCallback(
             (_) => _scrollToLastRead(verses),
           );
 
           return Stack(
             children: [
-              NotificationListener<ScrollUpdateNotification>(
-                onNotification: (notification) {
-                  // Track currently visible ayah by estimating from offset
-                  if (_scrollController.hasClients) {
-                    final offset = _scrollController.offset;
-                    final idx = (offset / 100).floor().clamp(
-                      0,
-                      verses.length - 1,
-                    );
-                    _currentVisibleAyah = verses[idx].number;
-                  }
-                  return false;
-                },
-                child: ListView.separated(
-                  controller: _scrollController,
-                  itemCount: verses.length,
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-                  separatorBuilder: (context, index) =>
-                      Divider(color: theme.dividerColor.withValues(alpha: 0.1)),
-                  itemBuilder: (context, index) {
-                    final ayah = verses[index];
-                    final isLastRead = ayah.number == _lastReadAyahNumber;
+              ListView.separated(
+                controller: _scrollController,
+                itemCount: verses.length,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                separatorBuilder: (context, index) =>
+                    Divider(color: theme.dividerColor.withValues(alpha: 0.1)),
+                itemBuilder: (context, index) {
+                  final ayah = verses[index];
+                  final isLastRead = ayah.number == _lastReadAyahNumber;
 
-                   final itemKey = _ayahKeys.putIfAbsent(ayah.number, () => GlobalKey<State<StatefulWidget>>());
+                  final itemKey = _ayahKeys.putIfAbsent(
+                    ayah.number,
+                    () => GlobalKey<State<StatefulWidget>>(),
+                  );
 
-                    return InkWell(
-                      key: itemKey, // ← أضف هنا فقط
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => _showTafsirSheet(context, ayah),
-                      // ... باقي الكود بدون تغيير
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isLastRead
-                              ? theme.colorScheme.tertiaryContainer.withValues(
-                                  alpha: 0.35,
-                                )
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          border: isLastRead
-                              ? Border.all(
-                                  color: theme.colorScheme.tertiary.withValues(
-                                    alpha: 0.5,
-                                  ),
-                                  width: 1,
-                                )
-                              : null,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Ayah number + bookmark indicator
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.primaryContainer
-                                        .withValues(alpha: 0.6),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    '\u06dd${ayah.number}',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.primary,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                  return InkWell(
+                    key: itemKey,
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _showTafsirSheet(context, ayah),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isLastRead
+                            ? theme.colorScheme.tertiaryContainer.withValues(
+                                alpha: 0.35,
+                              )
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: isLastRead
+                            ? Border.all(
+                                color: theme.colorScheme.tertiary.withValues(
+                                  alpha: 0.5,
+                                ),
+                                width: 1,
+                              )
+                            : null,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primaryContainer
+                                      .withValues(alpha: 0.6),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '\u06dd${ayah.number}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                if (isLastRead)
-                                  Chip(
-                                    label: Text(
-                                      l10n.lastReadLabel,
-                                      style: theme.textTheme.labelSmall,
-                                    ),
-                                    avatar: Icon(
-                                      Icons.bookmark_rounded,
-                                      size: 14,
-                                      color: theme.colorScheme.tertiary,
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                    backgroundColor: theme
-                                        .colorScheme
-                                        .tertiaryContainer
-                                        .withValues(alpha: 0.5),
+                              ),
+                              if (isLastRead)
+                                Chip(
+                                  label: Text(
+                                    l10n.lastReadLabel,
+                                    style: theme.textTheme.labelSmall,
                                   ),
-                                // Hint: tap to see tafsir
-                                if (!isLastRead)
-                                  Icon(
-                                    Icons.touch_app_outlined,
+                                  avatar: Icon(
+                                    Icons.bookmark_rounded,
                                     size: 14,
-                                    color: theme.colorScheme.onSurfaceVariant
-                                        .withValues(alpha: 0.35),
+                                    color: theme.colorScheme.tertiary,
                                   ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            // Arabic Uthmani text
-                            Text(
-                              ayah.text,
-                              style: AppTheme.quranTextStyle,
-                              textDirection: TextDirection.rtl,
-                              textAlign: TextAlign.justify,
-                            ),
-                            const SizedBox(height: 10),
-                            // English translation
-                            Text(
-                              ayah.translation,
-                              style: theme.textTheme.bodyMedium
-                                  ?.merge(AppTheme.uiTextStyle)
-                                  .copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                    height: 1.5,
-                                  ),
-                              textDirection: TextDirection.ltr,
-                            ),
-                          ],
-                        ),
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                  backgroundColor: theme
+                                      .colorScheme
+                                      .tertiaryContainer
+                                      .withValues(alpha: 0.5),
+                                ),
+                              if (!isLastRead)
+                                Icon(
+                                  Icons.touch_app_outlined,
+                                  size: 14,
+                                  color: theme.colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.35),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            ayah.text,
+                            style: AppTheme.quranTextStyle,
+                            textDirection: TextDirection.rtl,
+                            textAlign: TextAlign.justify,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            ayah.translation,
+                            style: theme.textTheme.bodyMedium
+                                ?.merge(AppTheme.uiTextStyle)
+                                .copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  height: 1.5,
+                                ),
+                            textDirection: TextDirection.ltr,
+                          ),
+                        ],
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
               ),
               // Floating "scroll to top" button
               Positioned(

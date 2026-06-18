@@ -32,29 +32,39 @@ class IslamicAudioHandler extends BaseAudioHandler {
   @override
   Future<void> seek(Duration position) => _player.seek(position);
 
+  // FIX #1: Separate timeouts — assets are local (5s), remote streams need 30s.
+  // Previous 10s timeout was too short for mp3quran.net servers on slow
+  // connections → TimeoutException → state reset to idle → Quran appears to
+  // stop immediately after tapping a surah.
   Future<void> setSource(String url, MediaItem mediaItem) async {
     this.mediaItem.add(mediaItem);
 
     final uri = Uri.parse(url);
     final isAsset = uri.scheme == 'asset';
+    final timeoutDuration = isAsset
+        ? const Duration(seconds: 5)
+        : const Duration(seconds: 30);
 
-    // إضافة الـ User-Agent لمنع حظر السيرفرات + حماية الـ Timeout
-    final duration = await (isAsset
-            ? _player.setAudioSource(
-                AudioSource.asset(
-                  uri.path.startsWith('/') ? uri.path.substring(1) : uri.path,
-                ),
-              )
-            : _player.setAudioSource(
-                AudioSource.uri(
-                  uri,
-                  headers: const {
-                    'User-Agent':
-                        'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
-                  },
-                ),
-              ))
-        .timeout(const Duration(seconds: 10));
+    final duration =
+        await (isAsset
+                ? _player.setAudioSource(
+                    AudioSource.asset(
+                      uri.path.startsWith('/')
+                          ? uri.path.substring(1)
+                          : uri.path,
+                    ),
+                  )
+                : _player.setAudioSource(
+                    AudioSource.uri(
+                      uri,
+                      headers: const {
+                        'User-Agent':
+                            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 '
+                            '(KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
+                      },
+                    ),
+                  ))
+            .timeout(timeoutDuration);
 
     this.mediaItem.add(mediaItem.copyWith(duration: duration));
   }
@@ -246,12 +256,16 @@ class AudioServiceWrapper {
       final mediaItem = MediaItem(id: url, album: subtitle, title: title);
       await _handler!.setSource(url, mediaItem);
 
-      // حماية: لو تم الضغط على إيقاف أثناء التحميل من الشبكة، اخرج فوراً ولا تبدأ التشغيل
+      // Guard: if stop was called while loading from network, exit immediately.
       if (_generation != startGen || _isDisposed) return;
 
-      // تعديل هام جداً: عدم استخدام await هنا لمنع تعليق الطابور البرمجي للأبد
+      // Not awaited — prevents blocking the operation queue indefinitely.
       _handler!.play();
     } catch (e) {
+      developer.log(
+        '[AudioServiceWrapper] _playNow error: $e',
+        name: 'AudioServiceWrapper',
+      );
       if (!currentState.isLocked && _generation == startGen) {
         _stateSubject.add(
           const AudioState(
@@ -266,6 +280,10 @@ class AudioServiceWrapper {
     }
   }
 
+  // FIX #2: Rethrow the setSource exception so the caller (_triggerAdhan in
+  // adhan_scheduler.dart) can fall back to the remote URL when the local asset
+  // fails.  Previously the exception was silently swallowed here, causing the
+  // fallback URL to never be tried and adhan to silently not play.
   Future<void> _triggerAdhanNow(
     String url,
     String title,
@@ -293,8 +311,9 @@ class AudioServiceWrapper {
     try {
       final mediaItem = MediaItem(id: url, album: subtitle, title: title);
       await _handler!.setSource(url, mediaItem);
-      _handler!.play(); // عدم استخدام await منعاً للتعليق
+      _handler!.play(); // Not awaited — prevents queue lock.
     } catch (e) {
+      // FIX: Reset state and RETHROW so the fallback URL can be tried.
       _stateSubject.add(
         const AudioState(
           mode: AudioMode.idle,
@@ -303,6 +322,7 @@ class AudioServiceWrapper {
           currentSource: null,
         ),
       );
+      rethrow; // ← KEY FIX: was missing, causing silent failure
     }
   }
 
@@ -376,13 +396,13 @@ class AudioServiceWrapper {
     }, generation: gen);
   }
 
-  // تعديل جوهري: الإيقاف الآن فوري (Bypass) ويكسر أي عملية تشغيل أو تحميل معلقة فوراً
+  /// Immediate stop — bypasses the queue and cancels any pending load.
   Future<void> stop() async {
     if (!isAvailable) return;
 
-    _generation++; // إلغاء فوري لأي عملية play_now شغالة في الخلفية
-    _queue = Future.value(); // تصفية الطابور بالكامل
-    await _stopNow(); // إيقاف المشغل فوراً
+    _generation++; // Cancels any in-flight _playNow
+    _queue = Future.value(); // Flush the queue
+    await _stopNow(); // Stop the player immediately
   }
 
   Future<void> switchSource(
@@ -399,7 +419,10 @@ class AudioServiceWrapper {
 
   void _handleAdhanComplete() {
     if (!isAvailable) return;
-    developer.log('Diagnostic Log - [AudioServiceWrapper]: Adhan completion event triggered.', name: 'AudioServiceWrapper');
+    developer.log(
+      'Diagnostic Log - [AudioServiceWrapper]: Adhan completion event triggered.',
+      name: 'AudioServiceWrapper',
+    );
     try {
       _handler!.stop();
     } catch (_) {}

@@ -63,7 +63,8 @@ class HomeController extends ChangeNotifier {
     final target = _adhanScheduler.scheduledTime;
     if (target == null) {
       _previousRemainingSeconds = null;
-      _countdownText = 'Unavailable';
+      // FIX: Use Arabic text instead of English 'Unavailable'
+      _countdownText = 'غير متاح';
       notifyListeners();
       return;
     }
@@ -80,11 +81,6 @@ class HomeController extends ChangeNotifier {
     final actualRemaining = diff.inSeconds;
 
     // ── Clock-drift detection ───────────────────────────────────────────────
-    // Under normal operation the ticker fires every ~1 s, so the remaining
-    // count should decrease by exactly 1.  A deviation > 30 s means the
-    // wall-clock jumped (manual change or DST flip) while the app was in the
-    // foreground.  Re-arm the scheduler so the Dart Timer realigns to the
-    // new wall-clock position.
     if (_previousRemainingSeconds != null) {
       final expected = _previousRemainingSeconds! - 1;
       final deviation = (actualRemaining - expected).abs();
@@ -93,13 +89,12 @@ class HomeController extends ChangeNotifier {
           'Clock drift detected (deviation: ${deviation}s) — rescheduling Adhan.',
           name: 'HomeController',
         );
-        _previousRemainingSeconds = null; // reset before reschedule
+        _previousRemainingSeconds = null;
         _adhanScheduler.rescheduleFromCache();
-        return; // reschedule triggers notifyListeners via listener
+        return;
       }
     }
     _previousRemainingSeconds = actualRemaining;
-    // ───────────────────────────────────────────────────────────────────────
 
     final hours = diff.inHours.toString().padLeft(2, '0');
     final minutes = (diff.inMinutes % 60).toString().padLeft(2, '0');
@@ -108,7 +103,6 @@ class HomeController extends ChangeNotifier {
     _countdownText = '$hours:$minutes:$seconds';
     notifyListeners();
 
-    // Occasional diagnostic log to avoid console spam (e.g. every 30 seconds)
     if (actualRemaining % 30 == 0) {
       developer.log(
         'Diagnostic Log - [HomeController]:\n'
@@ -121,16 +115,30 @@ class HomeController extends ChangeNotifier {
     }
   }
 
-  // Quick actions
+  // FIX: playLastPlayed now uses 'id' (surah number) as the title parameter
+  // for quran audio, so that currentSource in AudioServiceWrapper matches the
+  // value that isLastPlayedPlaying() compares against.
+  // Previously it used 'title' (english name like "Al-Fatihah") while
+  // isLastPlayedPlaying() compared against 'id' ("1") → mismatch → the play
+  // button on home never reflected the playing state after resuming.
   Future<void> playLastPlayed() async {
     if (_lastPlayed == null) return;
     try {
       final type = _lastPlayed!['type'] as String;
       final url = _lastPlayed!['url'] as String;
-      final title = _lastPlayed!['title'] as String;
       final subtitle = _lastPlayed!['subtitle'] as String;
 
       final mode = type == 'radio' ? AudioMode.radio : AudioMode.quran;
+
+      // For quran: use 'id' (surah number) as the title so currentSource matches
+      // what isLastPlayedPlaying() checks. For radio: 'title' is the station name.
+      final String title;
+      if (type == 'quran') {
+        title = _lastPlayed!['id'] as String;
+      } else {
+        title = _lastPlayed!['title'] as String;
+      }
+
       await _audioService.play(url, mode, title: title, subtitle: subtitle);
     } catch (e) {
       developer.log(
@@ -148,10 +156,10 @@ class HomeController extends ChangeNotifier {
     final type = _lastPlayed!['type'] as String? ?? '';
 
     if (type == 'quran') {
-      // مقارنة بالـ id (رقم السورة) — متطابق مع currentSource
+      // Compare against 'id' (surah number) — matches currentSource set by playSurah()
       return state.currentSource == _lastPlayed!['id'];
     } else {
-      // الراديو: station.name متطابق مع currentSource
+      // Radio: station.name matches currentSource
       return state.currentSource == _lastPlayed!['title'];
     }
   }

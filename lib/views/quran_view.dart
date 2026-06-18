@@ -133,20 +133,20 @@ class _QuranViewState extends State<QuranView> {
             child: quranController.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : quranController.errorMessage != null
-                    ? _buildErrorWidget(quranController)
-                    : filteredSurahs.isEmpty
-                        ? Center(child: Text(l10n.noSurahsFound))
-                        : ListView.builder(
-                            itemCount: filteredSurahs.length,
-                            padding: const EdgeInsets.only(bottom: 100),
-                            itemBuilder: (context, index) {
-                              final surah = filteredSurahs[index];
-                              return SurahTile(
-                                surah: surah,
-                                controller: quranController,
-                              );
-                            },
-                          ),
+                ? _buildErrorWidget(quranController)
+                : filteredSurahs.isEmpty
+                ? Center(child: Text(l10n.noSurahsFound))
+                : ListView.builder(
+                    itemCount: filteredSurahs.length,
+                    padding: const EdgeInsets.only(bottom: 100),
+                    itemBuilder: (context, index) {
+                      final surah = filteredSurahs[index];
+                      return SurahTile(
+                        surah: surah,
+                        controller: quranController,
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -154,7 +154,9 @@ class _QuranViewState extends State<QuranView> {
   }
 
   Widget _buildContinueReadingCard(
-      BuildContext context, QuranController controller) {
+    BuildContext context,
+    QuranController controller,
+  ) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final pos = controller.lastReadingPosition!;
@@ -186,24 +188,28 @@ class _QuranViewState extends State<QuranView> {
         ),
         subtitle: Text(
           '$surahName • ${l10n.ayahLabel} $ayahNumber',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.tertiary,
-          ).merge(AppTheme.uiTextStyle),
+          style: theme.textTheme.titleMedium
+              ?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.tertiary,
+              )
+              .merge(AppTheme.uiTextStyle),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(Icons.close_rounded,
-                  size: 18, color: theme.colorScheme.onSurfaceVariant),
+              icon: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
               onPressed: () => controller.clearReadingPosition(),
             ),
             const Icon(Icons.arrow_forward_ios_rounded, size: 16),
           ],
         ),
         onTap: () {
-          // Navigate to the surah at the saved position
           final surah = controller.surahs.firstWhere(
             (s) => s.number == surahNumber,
             orElse: () => controller.surahs.first,
@@ -228,13 +234,17 @@ class _QuranViewState extends State<QuranView> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.wifi_off_rounded,
-                size: 48, color: theme.colorScheme.error),
+            Icon(
+              Icons.wifi_off_rounded,
+              size: 48,
+              color: theme.colorScheme.error,
+            ),
             const SizedBox(height: 12),
             Text(
               l10n.networkError,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -243,13 +253,14 @@ class _QuranViewState extends State<QuranView> {
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
+            // FIX: Call retryFetch() instead of selectReciter().
+            // selectReciter() only rebuilds the surah list from static data
+            // and does NOT make a new network request. retryFetch() calls
+            // _loadInitialData() which re-fetches reciters from the API.
             ElevatedButton.icon(
               icon: const Icon(Icons.refresh_rounded),
               label: Text(l10n.tryAgain),
-              onPressed: controller.reciters.isEmpty
-                  ? null  // Bug 4 fix: guard against empty list
-                  : () => controller.selectReciter(
-                        controller.selectedReciter ?? controller.reciters.first),
+              onPressed: () => controller.retryFetch(),
             ),
           ],
         ),
@@ -299,8 +310,10 @@ class _QuranViewState extends State<QuranView> {
                         style: AppTheme.uiTextStyle,
                       ),
                       trailing: isSelected
-                          ? Icon(Icons.check_circle_rounded,
-                              color: theme.colorScheme.primary)
+                          ? Icon(
+                              Icons.check_circle_rounded,
+                              color: theme.colorScheme.primary,
+                            )
                           : null,
                       onTap: () {
                         controller.selectReciter(reciter);

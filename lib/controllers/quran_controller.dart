@@ -99,8 +99,7 @@ class QuranController extends ChangeNotifier {
         final lastReciterId = _storageService.get('last_reciter_id');
         final savedReciter = _reciters.firstWhere(
           (r) => r.id == lastReciterId,
-          orElse: () =>
-              _reciters.first, // safe: _reciters.isNotEmpty checked above
+          orElse: () => _reciters.first,
         );
         selectReciter(savedReciter);
       }
@@ -108,7 +107,7 @@ class QuranController extends ChangeNotifier {
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception:', '').trim();
       developer.log(
-        'Error initializing QuranController: \$_errorMessage',
+        'Error initializing QuranController: $_errorMessage',
         name: 'QuranController',
       );
     } finally {
@@ -116,6 +115,10 @@ class QuranController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // FIX: Expose retryFetch() publicly so the "Try Again" button in QuranView
+  // can trigger a real API retry instead of just calling selectReciter().
+  Future<void> retryFetch() => _loadInitialData();
 
   void selectReciter(Reciter reciter) {
     _selectedReciter = reciter;
@@ -170,19 +173,19 @@ class QuranController extends ChangeNotifier {
       await _audioService.play(
         surah.audioUrl!,
         AudioMode.quran,
-        title: surah.number.toString(), // use number as stable ID
+        title: surah.number.toString(), // stable ID for currentSource
         subtitle: _selectedReciter!.name,
       );
       await _storageService.setLastPlayedAudio({
         'type': 'quran',
-        'id': surah.number.toString(), // ← أضف هذا السطر فقط
+        'id': surah.number.toString(),
         'reciterId': _selectedReciter!.id,
         'title': surah.englishName,
         'subtitle': _selectedReciter!.name,
         'url': surah.audioUrl!,
       });
     } catch (e) {
-      developer.log('Failed to play Surah: \$e', name: 'QuranController');
+      developer.log('Failed to play Surah: $e', name: 'QuranController');
       rethrow;
     }
   }
