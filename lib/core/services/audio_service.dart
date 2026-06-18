@@ -33,9 +33,6 @@ class IslamicAudioHandler extends BaseAudioHandler {
   Future<void> seek(Duration position) => _player.seek(position);
 
   // FIX #1: Separate timeouts — assets are local (5s), remote streams need 30s.
-  // Previous 10s timeout was too short for mp3quran.net servers on slow
-  // connections → TimeoutException → state reset to idle → Quran appears to
-  // stop immediately after tapping a surah.
   Future<void> setSource(String url, MediaItem mediaItem) async {
     this.mediaItem.add(mediaItem);
 
@@ -121,8 +118,9 @@ class AudioServiceWrapper {
   bool get isInitialized => _isInitialized;
   bool get initFailed => _initFailed;
 
-  final BehaviorSubject<AudioState> _stateSubject =
-      BehaviorSubject<AudioState>.seeded(const AudioState());
+  final BehaviorSubject<AudioState> _stateSubject = BehaviorSubject.seeded(
+    const AudioState(),
+  );
 
   Stream<AudioState> get stateStream => _stateSubject.stream;
   AudioState get currentState => _stateSubject.value;
@@ -256,10 +254,8 @@ class AudioServiceWrapper {
       final mediaItem = MediaItem(id: url, album: subtitle, title: title);
       await _handler!.setSource(url, mediaItem);
 
-      // Guard: if stop was called while loading from network, exit immediately.
       if (_generation != startGen || _isDisposed) return;
 
-      // Not awaited — prevents blocking the operation queue indefinitely.
       _handler!.play();
     } catch (e) {
       developer.log(
@@ -281,9 +277,7 @@ class AudioServiceWrapper {
   }
 
   // FIX #2: Rethrow the setSource exception so the caller (_triggerAdhan in
-  // adhan_scheduler.dart) can fall back to the remote URL when the local asset
-  // fails.  Previously the exception was silently swallowed here, causing the
-  // fallback URL to never be tried and adhan to silently not play.
+  // adhan_scheduler.dart) can fall back to the remote URL when the local asset fails.
   Future<void> _triggerAdhanNow(
     String url,
     String title,
@@ -311,9 +305,8 @@ class AudioServiceWrapper {
     try {
       final mediaItem = MediaItem(id: url, album: subtitle, title: title);
       await _handler!.setSource(url, mediaItem);
-      _handler!.play(); // Not awaited — prevents queue lock.
+      _handler!.play();
     } catch (e) {
-      // FIX: Reset state and RETHROW so the fallback URL can be tried.
       _stateSubject.add(
         const AudioState(
           mode: AudioMode.idle,
@@ -322,7 +315,7 @@ class AudioServiceWrapper {
           currentSource: null,
         ),
       );
-      rethrow; // ← KEY FIX: was missing, causing silent failure
+      rethrow;
     }
   }
 
@@ -396,13 +389,12 @@ class AudioServiceWrapper {
     }, generation: gen);
   }
 
-  /// Immediate stop — bypasses the queue and cancels any pending load.
   Future<void> stop() async {
     if (!isAvailable) return;
 
-    _generation++; // Cancels any in-flight _playNow
-    _queue = Future.value(); // Flush the queue
-    await _stopNow(); // Stop the player immediately
+    _generation++;
+    _queue = Future.value();
+    await _stopNow();
   }
 
   Future<void> switchSource(
@@ -437,17 +429,50 @@ class AudioServiceWrapper {
     );
   }
 
+  // ── BUG FIX (Round 3): _handlePlaybackError — do NOT reset mode/source for
+  // non-Adhan playback errors.
+  //
+  // ROOT CAUSE: Previously, ANY network error (even a brief one) during Quran
+  // or Radio playback would reset state to AudioMode.idle + null currentSource.
+  // This made the Quran appear to "stop and disappear" immediately on any
+  // network hiccup, because:
+  //   1. setSource succeeds (audio starts loading/buffering)
+  //   2. A transient network event fires onError on playbackEventStream
+  //   3. _handlePlaybackError() resets to idle + clears the surah
+  //   4. UI shows no surah is playing — looks like "stopped immediately"
+  //
+  // FIX: For locked (Adhan) audio → reset fully to idle (correct, adhan must end cleanly).
+  //      For unlocked (Quran/Radio) → only set isPlaying: false, KEEP mode and
+  //      currentSource so the UI shows the surah/station as paused (not gone),
+  //      allowing the user to retry without re-selecting.
   void _handlePlaybackError() {
     if (!isAvailable) return;
+    developer.log(
+      '[AudioServiceWrapper] Playback error — mode: ${currentState.mode}, locked: ${currentState.isLocked}',
+      name: 'AudioServiceWrapper',
+    );
     try {
       _handler!.stop();
     } catch (_) {}
-    if (!currentState.isLocked) {
+
+    if (currentState.isLocked) {
+      // Adhan error → reset fully to idle (adhan lock must always be cleared)
+      _stateSubject.add(
+        const AudioState(
+          isLocked: false,
+          mode: AudioMode.idle,
+          isPlaying: false,
+          currentSource: null,
+          previousSource: null,
+        ),
+      );
+    } else {
+      // Quran / Radio error → keep mode + currentSource, only stop playing
+      // so the UI keeps the surah/station visible for the user to retry.
       _stateSubject.add(
         currentState.copyWith(
           isPlaying: false,
-          mode: AudioMode.idle,
-          currentSource: null,
+          // mode and currentSource intentionally NOT cleared
         ),
       );
     }

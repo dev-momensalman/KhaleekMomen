@@ -16,20 +16,22 @@ import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // BUG FIXES APPLIED:
-//  #1  tz.setLocalLocation() now called with API timezone (e.g. Africa/Cairo)
-//      → Fixes 2-3 hour delay for Egyptian users (tz.local was defaulting to UTC)
-//  #2  Channel delete+recreate before each schedule
-//      → Fixes Adhan sound not updating after user changes it in Settings
-//  #3  fullScreenIntent: true
-//      → Wakes screen like an alarm (was false — screen stayed off)
-//  #4  Next-day scheduling when all today's prayers have passed
-//      → Fixes "no Fajr notification" when app is killed after Isha
-//  #5  Stale cache date handling: adjusts date to today/tomorrow
-//      → Fixes 0 scheduled notifications when cache is from yesterday
-//  #6  Exact alarm permission guard before zonedSchedule
-//      → Falls back to inexact+warning instead of silent crash on Android 12+
-//  #7  Notification tap handler (onDidReceiveNotificationResponse)
-//      → Tapping notification now opens/resumes the app correctly
+// #1 tz.setLocalLocation() now called with API timezone (e.g. Africa/Cairo)
+//    → Fixes 2-3 hour delay for Egyptian users (tz.local was defaulting to UTC)
+// #2 Channel delete+recreate before each schedule
+//    → Fixes Adhan sound not updating after user changes it in Settings
+// #3 fullScreenIntent: true
+//    → Wakes screen like an alarm (was false — screen stayed off)
+// #4 Next-day scheduling when all today's prayers have passed
+//    → Fixes "no Fajr notification" when app is killed after Isha
+// #5 Stale cache date handling: adjusts date to today/tomorrow
+//    → Fixes 0 scheduled notifications when cache is from yesterday
+// #6 Exact alarm permission guard before zonedSchedule
+//    → Falls back to inexact+warning instead of silent crash on Android 12+
+//    → FIX (new): alarmClock mode also requires SCHEDULE_EXACT_ALARM on Android 12+;
+//       correct fallback is AndroidScheduleMode.inexact which needs NO permission.
+// #7 Notification tap handler (onDidReceiveNotificationResponse)
+//    → Tapping notification now opens/resumes the app correctly
 // ─────────────────────────────────────────────────────────────────────────────
 
 class NotificationService {
@@ -70,14 +72,14 @@ class NotificationService {
     if (_isInitialized || _initFailed) return;
     try {
       // 1. Load timezone database.
-      //    tz.setLocalLocation() is called later in schedulePrayerNotifications()
-      //    using the IANA timezone from the Aladhan API (e.g. "Africa/Cairo").
-      //    We do NOT set it here because we don't know the timezone at boot time.
+      // tz.setLocalLocation() is called later in schedulePrayerNotifications()
+      // using the IANA timezone from the Aladhan API (e.g. "Africa/Cairo").
+      // We do NOT set it here because we don't know the timezone at boot time.
       tz_data.initializeTimeZones();
 
       // 2. Initialize plugin with notification tap handler
-      //    BUG FIX #7: onDidReceiveNotificationResponse opens the app
-      //    when the user taps a prayer notification.
+      // BUG FIX #7: onDidReceiveNotificationResponse opens the app
+      // when the user taps a prayer notification.
       const androidSettings = AndroidInitializationSettings(
         '@mipmap/ic_launcher',
       );
@@ -158,10 +160,10 @@ class NotificationService {
 
   // ── SCHEDULE ──────────────────────────────────────────────────────────────
 
-  static Future schedulePrayerNotifications(
+  static Future<void> schedulePrayerNotifications(
     PrayerTimes prayerTimes, {
     required StorageService storage,
-    PrayerTimes? tomorrowPrayerTimes, // ← أضف هذا
+    PrayerTimes? tomorrowPrayerTimes,
   }) async {
     if (!_isInitialized) {
       developer.log(
@@ -364,12 +366,16 @@ class NotificationService {
       // this call, so TZDateTime.from() correctly converts local time to zoned.
       final tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
 
-      // BUG FIX #6: Use exact scheduling only if permission is granted,
-      // otherwise fall back to inexact (alarmClock) with a warning.
+      // BUG FIX #6 (updated): Use exact scheduling only if permission is granted.
+      // IMPORTANT: AndroidScheduleMode.alarmClock also requires SCHEDULE_EXACT_ALARM
+      // on Android 12+ (it uses AlarmManager.setAlarmClock() which needs the same
+      // permission). The correct fallback when permission is denied is
+      // AndroidScheduleMode.inexact which uses AlarmManager.set() and requires
+      // NO special permission — it may fire slightly late but always fires.
       final scheduleMode = _exactAlarmPermissionGranted
           ? AndroidScheduleMode.exactAllowWhileIdle
           : AndroidScheduleMode
-                .alarmClock; // alarmClock doesn't need SCHEDULE_EXACT_ALARM
+                .inexact; // ← FIX: was alarmClock (wrong fallback)
 
       final androidDetails = AndroidNotificationDetails(
         channelId,
@@ -398,7 +404,7 @@ class NotificationService {
       await _plugin.zonedSchedule(
         id,
         'حان وقت صلاة $arabic — خليك مؤمن',
-        'إِنَّ الصَّلَاةَ كَانَتْ عَلَى الْمُؤْمِنِينَ كِتَابًا مَّوْقُوتًا',
+        'إِنَّ الصَّلَاةَ كَانَتْ عَلَى الْمُؤْمِنِينَ كِتَابًا مَّوْقُوتًا',
         tzTime,
         NotificationDetails(android: androidDetails, iOS: iOSDetails),
         androidScheduleMode: scheduleMode,
