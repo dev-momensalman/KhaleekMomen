@@ -10,9 +10,6 @@ class RadioService {
 
   // High-quality, reliable default list of stations
   final List<Station> _defaultStations = [
-    // ═══════════════════════════════════════════════
-    // إذاعات مصر — Egypt
-    // ═══════════════════════════════════════════════
     Station(
       id: 'egypt_quran_cairo_main',
       name: 'إذاعة القرآن الكريم من القاهرة',
@@ -34,10 +31,6 @@ class RadioService {
       streamUrl: 'https://stream.zeno.fm/0r0xa792kwzuv',
       type: 'quran',
     ),
-
-    // ═══════════════════════════════════════════════
-    // المملكة العربية السعودية — Saudi Arabia
-    // ═══════════════════════════════════════════════
     Station(
       id: 'makkah_haram',
       name: 'إذاعة القرآن الكريم من مكة المكرمة',

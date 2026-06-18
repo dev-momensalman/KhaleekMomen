@@ -194,7 +194,7 @@ class _MyAppState extends State<MyApp> {
       child: Consumer<SettingsController>(
         builder: (context, settings, _) {
           return MaterialApp(
-            title: 'Islamic Audio Hub',
+            title: 'خليك مؤمن',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
