@@ -1,0 +1,13 @@
+[1mdiff --git a/lib/core/services/adhan_scheduler.dart b/lib/core/services/adhan_scheduler.dart[m
+[1mindex c531a33..ffc348a 100644[m
+[1m--- a/lib/core/services/adhan_scheduler.dart[m
+[1m+++ b/lib/core/services/adhan_scheduler.dart[m
+[36m@@ -252,7 +252,7 @@[m [mclass AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {[m
+           adhanUrl,[m
+           AudioMode.adhan,[m
+           title: 'Adhan ($prayerName)',[m
+[31m-          subtitle: 'Islamic Audio Hub',[m
+[32m+[m[32m          subtitle: 'خليك مؤمن',[m
+         )[m
+         .then((_) {[m
+           developer.log([m

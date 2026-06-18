@@ -271,7 +271,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
                 _fallbackAdhanUrl,
                 AudioMode.adhan,
                 title: 'Adhan ($prayerName)',
-                subtitle: 'Islamic Audio Hub',
+                subtitle: 'خليك مؤمن',
               )
               .catchError((e) {
                 developer.log(
