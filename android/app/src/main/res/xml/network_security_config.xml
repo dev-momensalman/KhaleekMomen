@@ -1,13 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  FIX: Radio stream URLs use http:// (not https://).
-  Android 9+ (API 28+) blocks cleartext HTTP by default.
-  This config allows cleartext traffic only for the known radio domains.
--->
 <network-security-config>
+    <!--
+        السماح بـ HTTP للسيرفرات المعروفة للراديو الإسلامي.
+        مطلوب على Android 9+ (API 28+) لأن cleartext محظور بالافتراضي.
+    -->
     <domain-config cleartextTrafficPermitted="true">
-        <!-- mp3quran.net radio streams use HTTP on custom ports -->
-        <domain includeSubdomains="true">mp3quran.net</domain>
+        <!-- mp3quran.net — المصدر الرئيسي للراديو -->
         <domain includeSubdomains="true">live.mp3quran.net</domain>
+        <!-- إذاعة القرآن الكريم المصرية الرسمية -->
+        <domain includeSubdomains="true">misrquran.gov.eg</domain>
+        <domain includeSubdomains="true">holyquranradio.com</domain>
+        <!-- RadioJar CDN للبث -->
+        <domain includeSubdomains="true">radiojar.com</domain>
+        <!-- احتياطي عام للبث -->
+        <domain includeSubdomains="true">stream.zeno.fm</domain>
     </domain-config>
 </network-security-config>
