@@ -227,23 +227,57 @@ class _MyAppState extends State<MyApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
-      home: const Scaffold(
+      home: Scaffold(
+        backgroundColor: AppTheme.primaryEmerald,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(color: AppTheme.primaryEmerald),
-              SizedBox(height: 28),
-              Text(
-                'Islamic Audio Hub',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryEmerald,
+              // أيقونة بسيطة بدل الـ CircularProgressIndicator
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.mosque_rounded,
+                  size: 48,
+                  color: Colors.white,
                 ),
               ),
-              SizedBox(height: 8),
-              Text('Starting up…', style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 24),
+              // اسم التطبيق
+              const Text(
+                'خليك مؤمن',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // شعار صغير
+              Text(
+                'استمع • تعلم • تذكر',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.white.withValues(alpha: 0.75),
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 48),
+              // مؤشر تحميل أخف
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+              ),
             ],
           ),
         ),
