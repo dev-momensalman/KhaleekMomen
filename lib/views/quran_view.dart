@@ -12,10 +12,10 @@ class QuranView extends StatefulWidget {
   const QuranView({super.key});
 
   @override
-  State<QuranView> createState() => _QuranViewState();
+  State createState() => _QuranViewState();
 }
 
-class _QuranViewState extends State<QuranView> {
+class _QuranViewState extends State {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -29,7 +29,7 @@ class _QuranViewState extends State<QuranView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final quranController = Provider.of<QuranController>(context);
+    final quranController = Provider.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
     final filteredSurahs = quranController.surahs.where((surah) {
@@ -89,7 +89,6 @@ class _QuranViewState extends State<QuranView> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    // ✅ FIX: l10n بدل '${filteredSurahs.length} نتيجة'
                     l10n.resultCount(filteredSurahs.length),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.primary,
@@ -536,7 +535,6 @@ class _RecitersModalState extends State<_RecitersModal> {
                             .merge(AppTheme.uiTextStyle),
                       ),
                       Text(
-                        // ✅ FIX: l10n بدل '${...} قارئ'
                         l10n.reciterCount(widget.controller.reciters.length),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
@@ -562,7 +560,6 @@ class _RecitersModalState extends State<_RecitersModal> {
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                // ✅ FIX: l10n بدل 'ابحث عن قارئ...'
                 hintText: l10n.searchReciter,
                 hintStyle: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant.withValues(
@@ -630,7 +627,6 @@ class _RecitersModalState extends State<_RecitersModal> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      // ✅ FIX: l10n بدل '${filtered.length} نتيجة'
                       l10n.resultCount(filtered.length),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.primary,
@@ -660,7 +656,6 @@ class _RecitersModalState extends State<_RecitersModal> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          // ✅ FIX: l10n بدل 'لا يوجد قارئ بهذا الاسم'
                           l10n.noReciterFound,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
@@ -672,7 +667,8 @@ class _RecitersModalState extends State<_RecitersModal> {
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    // ✅ FIX: (_, _) بدل (_, __) — Dart 3.x wildcard
+                    separatorBuilder: (_, _) => const SizedBox(height: 4),
                     itemBuilder: (context, index) {
                       final reciter = filtered[index];
                       final isSelected =

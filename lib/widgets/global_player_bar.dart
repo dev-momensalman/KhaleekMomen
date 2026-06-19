@@ -19,7 +19,9 @@ class GlobalPlayerBar extends StatelessWidget {
       builder: (context, snapshot) {
         final state = snapshot.data!;
 
-        if (state.mode == AudioMode.idle || state.currentSource == null) {
+        if (state.mode == AudioMode.idle ||
+            state.mode == AudioMode.adhan || // ← الإضافة الوحيدة
+            state.currentSource == null) {
           return const SizedBox.shrink();
         }
 

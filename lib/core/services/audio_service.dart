@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:islamic_audio_hub/data/models/audio_state.dart';
+import 'package:islamic_audio_hub/core/services/adhan_player.dart';
 
 class IslamicAudioHandler extends BaseAudioHandler {
   final AudioPlayer _player = AudioPlayer();
@@ -156,16 +157,13 @@ class AudioServiceWrapper {
   void _attachListeners() {
     _handler!.player.playerStateStream.listen((playerState) {
       final isPlaying = playerState.playing;
-      final isCompleted =
-          playerState.processingState == ProcessingState.completed;
 
       if (currentState.isPlaying != isPlaying) {
         _stateSubject.add(currentState.copyWith(isPlaying: isPlaying));
       }
 
-      if (isCompleted && currentState.mode == AudioMode.adhan) {
-        _handleAdhanComplete();
-      }
+      // NOTE: Adhan completion is now handled by AdhanPlayer's onComplete
+      // callback in AdhanScheduler — no longer handled here.
     });
 
     _handler!.player.playbackEventStream.listen(
@@ -200,17 +198,12 @@ class AudioServiceWrapper {
     _stateSubject.add(
       currentState.copyWith(
         isPlaying: false,
-        mode: currentState.isLocked ? AudioMode.adhan : AudioMode.idle,
-        currentSource: currentState.isLocked
-            ? currentState.currentSource
-            : null,
+        mode: AudioMode.idle,
+        currentSource: null,
       ),
     );
   }
 
-  // BUG FIX #3: Added optional [displayTitle] — used for MediaItem.title
-  // (shown in the media notification / lock screen control).
-  // [title] remains the stable currentSource identifier (e.g. surah number).
   Future<void> _playNow(
     String url,
     AudioMode targetMode, {
@@ -231,15 +224,13 @@ class AudioServiceWrapper {
         currentSource: title,
         previousSource: currentState.currentSource,
         isLocked: false,
-        displayTitle: displayTitle ?? title, // ← اسم السورة بالعربي
-        subtitle: subtitle, // ← اسم القارئ
+        displayTitle: displayTitle ?? title,
+        subtitle: subtitle,
       ),
     );
     final startGen = _generation;
 
     try {
-      // BUG FIX #3: Use displayTitle for what shows in the media notification.
-      // Falls back to title if displayTitle is not provided.
       final mediaItem = MediaItem(
         id: url,
         album: subtitle,
@@ -269,56 +260,61 @@ class AudioServiceWrapper {
     }
   }
 
-  // BUG FIX #3: Added optional [displayTitle] for MediaItem.title.
-  Future<void> _triggerAdhanNow(
-    String url,
-    String title,
-    String subtitle, {
-    String? displayTitle,
-  }) async {
-    if (!isAvailable) return;
+  // ── ADHAN LOCK/UNLOCK ────────────────────────────────────────────────────
+  // Adhan audio is played by AdhanPlayer (not AudioService).
+  // These methods only manage the locked state so Quran/Radio
+  // cannot interrupt the adhan.
 
+  /// Lock the audio service for adhan playback.
+  /// Stops any running Quran / Radio and marks state as adhan-locked.
+  /// Actual audio is played by AdhanPlayer.
+  void lockForAdhan(String arabicPrayerName) {
     _generation++;
     _queue = Future.value();
 
-    try {
-      await _handler!.stop();
-    } catch (_) {}
+    // Stop any running Quran/Radio from AudioService
+    if (isAvailable && currentState.isPlaying) {
+      try {
+        _handler!.stop();
+      } catch (_) {}
+    }
 
     _stateSubject.add(
       AudioState(
         mode: AudioMode.adhan,
-        isPlaying: false,
+        isPlaying: true, // visual indicator in UI
         isLocked: true,
-        previousSource: currentState.currentSource,
-        currentSource: title,
-        displayTitle: displayTitle ?? title, // ← اسم الأذان
-        subtitle: subtitle, // ← اسم الصلاة
+        currentSource: arabicPrayerName,
+        displayTitle: arabicPrayerName,
+        subtitle: 'خليك مؤمن',
       ),
     );
 
-    try {
-      final mediaItem = MediaItem(
-        id: url,
-        album: subtitle,
-        title: displayTitle ?? title, // BUG FIX #3
-      );
-      await _handler!.setSource(url, mediaItem);
-      _handler!.play();
-    } catch (e) {
-      _stateSubject.add(
-        const AudioState(
-          mode: AudioMode.idle,
-          isPlaying: false,
-          isLocked: false,
-          currentSource: null,
-        ),
-      );
-      rethrow;
-    }
+    developer.log(
+      'AudioServiceWrapper: locked for adhan — $arabicPrayerName',
+      name: 'AudioServiceWrapper',
+    );
   }
 
-  // BUG FIX #3: Added optional [displayTitle] parameter.
+  /// Unlock after adhan finishes. Resets state to idle.
+  void unlockFromAdhan() {
+    _stateSubject.add(
+      const AudioState(
+        mode: AudioMode.idle,
+        isPlaying: false,
+        isLocked: false,
+        currentSource: null,
+      ),
+    );
+
+    developer.log(
+      'AudioServiceWrapper: unlocked from adhan.',
+      name: 'AudioServiceWrapper',
+    );
+  }
+
+  // ── PLAY (Quran / Radio only) ─────────────────────────────────────────────
+
   Future<void> play(
     String url,
     AudioMode targetMode, {
@@ -329,12 +325,15 @@ class AudioServiceWrapper {
     if (!isAvailable) {
       return Future.error(AudioServiceException(AudioError.serviceUnavailable));
     }
-    if (currentState.isLocked && targetMode != AudioMode.adhan) {
+    // Reject if locked (adhan in progress)
+    if (currentState.isLocked) {
       return Future.error(Exception('Audio locked during Adhan.'));
     }
-    if (targetMode == AudioMode.adhan) {
-      return _triggerAdhanNow(url, title, subtitle, displayTitle: displayTitle);
-    }
+    // Adhan must now use lockForAdhan() + AdhanPlayer, not play()
+    assert(
+      targetMode != AudioMode.adhan,
+      'Use lockForAdhan() + AdhanPlayer.play() for adhan mode.',
+    );
 
     final now = DateTime.now();
     if (url == _lastPlayUrl &&
@@ -352,7 +351,7 @@ class AudioServiceWrapper {
         targetMode,
         title: title,
         subtitle: subtitle,
-        displayTitle: displayTitle, // BUG FIX #3: pass through
+        displayTitle: displayTitle,
       ),
       generation: gen,
     );
@@ -362,9 +361,7 @@ class AudioServiceWrapper {
     if (!isAvailable) {
       return Future.error(AudioServiceException(AudioError.serviceUnavailable));
     }
-    if (currentState.isLocked && currentState.mode != AudioMode.adhan) {
-      return Future.value();
-    }
+    if (currentState.isLocked) return Future.value();
     final gen = _generation;
     return _enqueue(() async {
       if (!isAvailable) return;
@@ -378,9 +375,7 @@ class AudioServiceWrapper {
     if (!isAvailable) {
       return Future.error(AudioServiceException(AudioError.serviceUnavailable));
     }
-    if (currentState.isLocked && currentState.mode != AudioMode.adhan) {
-      return Future.value();
-    }
+    if (currentState.isLocked) return Future.value();
     final gen = _generation;
     return _enqueue(() async {
       if (!isAvailable) return;
@@ -394,6 +389,12 @@ class AudioServiceWrapper {
     if (!isAvailable) return;
     _generation++;
     _queue = Future.value();
+
+    // Also stop AdhanPlayer if adhan is in progress
+    if (currentState.mode == AudioMode.adhan) {
+      await AdhanPlayer.stop();
+    }
+
     await _stopNow();
   }
 
@@ -416,49 +417,17 @@ class AudioServiceWrapper {
     );
   }
 
-  void _handleAdhanComplete() {
-    if (!isAvailable) return;
-    developer.log(
-      'Diagnostic Log - [AudioServiceWrapper]: Adhan completion triggered.',
-      name: 'AudioServiceWrapper',
-    );
-    try {
-      _handler!.stop();
-    } catch (_) {}
-    _stateSubject.add(
-      const AudioState(
-        isLocked: false,
-        mode: AudioMode.idle,
-        isPlaying: false,
-        currentSource: null,
-        previousSource: null,
-      ),
-    );
-  }
-
   void _handlePlaybackError() {
     if (!isAvailable) return;
     developer.log(
-      '[AudioServiceWrapper] Playback error — mode: ${currentState.mode}, locked: ${currentState.isLocked}',
+      '[AudioServiceWrapper] Playback error — mode: ${currentState.mode}',
       name: 'AudioServiceWrapper',
     );
     try {
       _handler!.stop();
     } catch (_) {}
 
-    if (currentState.isLocked) {
-      _stateSubject.add(
-        const AudioState(
-          isLocked: false,
-          mode: AudioMode.idle,
-          isPlaying: false,
-          currentSource: null,
-          previousSource: null,
-        ),
-      );
-    } else {
-      _stateSubject.add(currentState.copyWith(isPlaying: false));
-    }
+    _stateSubject.add(currentState.copyWith(isPlaying: false));
   }
 
   void dispose() {

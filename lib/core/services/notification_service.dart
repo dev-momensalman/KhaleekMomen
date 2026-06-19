@@ -412,6 +412,22 @@ class NotificationService {
     }
   }
 
+  /// Cancel the immediate adhan banner (ID 200) after adhan finishes.
+  static Future<void> cancelAdhanNotification() async {
+    if (!_isInitialized) return;
+    try {
+      await _plugin.cancel(200);
+      developer.log(
+        'Adhan notification (ID 200) cancelled.',
+        name: 'NotificationService',
+      );
+    } catch (e) {
+      developer.log(
+        'cancelAdhanNotification error: $e',
+        name: 'NotificationService',
+      );
+    }
+  }
   // ── CANCEL ────────────────────────────────────────────────────────────────
 
   static Future<void> cancelAllPrayerNotifications() async {

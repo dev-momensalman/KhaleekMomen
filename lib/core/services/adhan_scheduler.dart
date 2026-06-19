@@ -3,10 +3,10 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:flutter/widgets.dart';
+import 'package:islamic_audio_hub/core/services/adhan_player.dart';
 import 'package:islamic_audio_hub/core/services/audio_service.dart';
 import 'package:islamic_audio_hub/core/services/notification_service.dart';
 import 'package:islamic_audio_hub/core/services/storage_service.dart';
-import 'package:islamic_audio_hub/data/models/audio_state.dart';
 import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
 import 'package:intl/intl.dart';
@@ -18,8 +18,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _prayerTimer;
   DateTime? _scheduledTime;
   String? _scheduledPrayerName;
-
-  // ✅ FIX: يُفرّق بين "جاري التحميل" و"غير متاح حقاً"
   bool _hasBeenScheduled = false;
 
   static const Map<String, String> _arabicNames = {
@@ -30,6 +28,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     'Isha': 'العشاء',
   };
 
+  // Network fallback — only used if ALL local assets fail
   static const String _fallbackAdhanUrl =
       'https://download.quranicaudio.com/adhan/azan_makkah.mp3';
 
@@ -41,8 +40,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> scheduleNextAdhan(PrayerTimes? prayerTimes) async {
     _cancelTimer();
-    _hasBeenScheduled =
-        true; // ✅ FIX: نحدّد أنه تم الاستدعاء مرة واحدة على الأقل
+    _hasBeenScheduled = true;
 
     if (prayerTimes == null || !prayerTimes.isValidChronologically()) {
       developer.log(
@@ -54,10 +52,10 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    // 1. In-process Timer (sync — يضبط _scheduledTime فوراً)
+    // 1. In-process Timer (sync — sets _scheduledTime immediately)
     _scheduleInProcessTimer(prayerTimes);
 
-    // 2. OS notifications (async — يعمل في الخلفية)
+    // 2. OS notifications (async — runs in background)
     if (_storageService.isAdhanAutoPlayEnabled()) {
       PrayerTimes? tomorrowPt;
       final tomorrowJson = _storageService.get('cached_prayer_times_tomorrow');
@@ -92,7 +90,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
   DateTime? get scheduledTime => _scheduledTime;
   String? get scheduledPrayerName => _scheduledPrayerName;
-  bool get hasBeenScheduled => _hasBeenScheduled; // ✅ FIX
+  bool get hasBeenScheduled => _hasBeenScheduled;
 
   String? get scheduledPrayerNameArabic => _scheduledPrayerName != null
       ? _arabicNames[_scheduledPrayerName] ?? _scheduledPrayerName
@@ -104,7 +102,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       developer.log(
-        'App resumed — checking and recalculating Adhan schedule.',
+        'App resumed — recalculating Adhan schedule.',
         name: 'AdhanScheduler',
       );
       _rescheduleAfterFired();
@@ -155,10 +153,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         );
         if (cached.date == tomorrowStr && cached.isValidChronologically()) {
           tomorrowTimes = cached;
-          developer.log(
-            'Using actual tomorrow times for timer.',
-            name: 'AdhanScheduler',
-          );
         }
       } catch (_) {}
     }
@@ -197,7 +191,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
     if (nextPrayerTime == null) {
       developer.log(
-        'Diagnostic Log - [AdhanScheduler]: No upcoming prayers found.',
+        'AdhanScheduler: No upcoming prayers found.',
         name: 'AdhanScheduler',
       );
       return;
@@ -207,32 +201,27 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     _scheduledPrayerName = nextPrayerName;
     final duration = nextPrayerTime.difference(now);
 
-    final arabicForLog = _arabicNames[nextPrayerName] ?? nextPrayerName!;
     developer.log(
-      'Diagnostic Log - [AdhanScheduler]:\n'
-      ' - Current Time: $now\n'
-      ' - Next Prayer: $arabicForLog ($nextPrayerName)\n'
-      ' - Next Prayer Time: $nextPrayerTime\n'
-      ' - Countdown Duration: $duration (${duration.inSeconds} seconds)\n'
-      ' - Cache Date: ${prayerTimes.date}',
+      'AdhanScheduler: next prayer = '
+      '${_arabicNames[nextPrayerName] ?? nextPrayerName} '
+      'in ${duration.inSeconds}s',
       name: 'AdhanScheduler',
     );
 
     _prayerTimer = Timer(duration, () => _triggerAdhan(nextPrayerName!));
   }
 
-  // ── ADHAN PLAYBACK ─────────────────────────────────────────────────────────
+  // ── ADHAN TRIGGER ──────────────────────────────────────────────────────────
 
   void _triggerAdhan(String prayerName) {
     final arabicName = _arabicNames[prayerName] ?? prayerName;
 
     developer.log(
-      'Adhan timer fired for: $arabicName ($prayerName)',
+      'Adhan timer fired — $arabicName ($prayerName)',
       name: 'AdhanScheduler',
     );
 
-    final autoPlayEnabled = _storageService.isAdhanAutoPlayEnabled();
-    if (!autoPlayEnabled) {
+    if (!_storageService.isAdhanAutoPlayEnabled()) {
       developer.log(
         'Adhan autoplay disabled — skipping audio.',
         name: 'AdhanScheduler',
@@ -241,52 +230,59 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
+    // ── 1. Show notification banner (foreground-safe, no duplicate sound) ──
+    // playSound: false in this channel — audio is handled by AdhanPlayer.
     NotificationService.showImmediateAdhanNotification(arabicName);
 
+    // ── 2. Lock AudioService (stops Quran/Radio, blocks new media plays) ────
+    _audioService.lockForAdhan(arabicName);
+
+    // ── 3. Resolve adhan sound ─────────────────────────────────────────────
     final savedFile = _storageService.getSelectedAdhanSound();
     final selectedOption = AdhanSoundOption.fromFileName(
       savedFile.isEmpty ? null : savedFile,
     );
-    final adhanUrl = selectedOption.assetPath;
 
-    _audioService
-        .play(
-          adhanUrl,
-          AudioMode.adhan,
-          title: arabicName,
-          subtitle: 'خليك مؤمن',
-        )
+    // ── 4. onComplete: called when adhan finishes (or fails with fallback) ──
+    void onComplete() {
+      _audioService.unlockFromAdhan();
+      NotificationService.cancelAdhanNotification();
+      _rescheduleAfterFired();
+    }
+
+    // ── 5. Play via AdhanPlayer (alarm stream, no media session) ────────────
+    AdhanPlayer.play(selectedOption.assetPath, onComplete: onComplete)
         .then((_) {
           developer.log(
-            'Adhan playing: ${selectedOption.displayName}',
+            'AdhanPlayer: playing "${selectedOption.displayName}"',
             name: 'AdhanScheduler',
           );
         })
-        .catchError((err) {
+        .catchError((Object err) {
           developer.log(
-            'Adhan play failed: $err — retrying with fallback.',
+            'AdhanPlayer failed: $err — trying network fallback.',
             name: 'AdhanScheduler',
           );
-          _audioService
-              .play(
-                _fallbackAdhanUrl,
-                AudioMode.adhan,
-                title: arabicName,
-                subtitle: 'خليك مؤمن',
-              )
-              .catchError((e) {
-                developer.log(
-                  'Fallback adhan also failed: $e',
-                  name: 'AdhanScheduler',
-                );
-              });
-        })
-        .whenComplete(_rescheduleAfterFired);
+          // Network fallback — only if asset fails
+          AdhanPlayer.play(
+            _fallbackAdhanUrl,
+            onComplete: onComplete,
+          ).catchError((Object e) {
+            developer.log(
+              'Fallback also failed: $e — unlocking anyway.',
+              name: 'AdhanScheduler',
+            );
+            // Even if everything fails, unlock and reschedule
+            onComplete();
+          });
+        });
   }
+
+  // ── RESCHEDULE ─────────────────────────────────────────────────────────────
 
   void _rescheduleAfterFired() {
     developer.log(
-      'Diagnostic Log - [AdhanScheduler]: Rescheduling after adhan completed.',
+      'AdhanScheduler: rescheduling after adhan.',
       name: 'AdhanScheduler',
     );
     final cachedJson = _storageService.get('cached_prayer_times');
@@ -295,10 +291,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       final pt = PrayerTimes.fromJson(Map<String, dynamic>.from(cachedJson));
       unawaited(scheduleNextAdhan(pt));
     } catch (e) {
-      developer.log(
-        'Error rescheduling after fire: $e',
-        name: 'AdhanScheduler',
-      );
+      developer.log('Error rescheduling: $e', name: 'AdhanScheduler');
     }
   }
 
