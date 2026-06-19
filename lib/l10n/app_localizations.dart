@@ -1027,6 +1027,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Verse'**
   String get ayahLabel;
+
+  /// No description provided for @playerStationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Station: '**
+  String get playerStationLabel;
+
+  /// No description provided for @playerSurahLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Surah: '**
+  String get playerSurahLabel;
+
+  /// No description provided for @playerReciterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reciter: '**
+  String get playerReciterLabel;
+
+  /// No description provided for @playerCountryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Country: '**
+  String get playerCountryLabel;
+
+  /// No description provided for @filterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get filterAll;
+
+  /// No description provided for @filterFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorites'**
+  String get filterFavorites;
+
+  /// No description provided for @nowPlaying.
+  ///
+  /// In en, this message translates to:
+  /// **'Now Playing'**
+  String get nowPlaying;
+
+  /// No description provided for @noFavoriteStationsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorite stations yet'**
+  String get noFavoriteStationsYet;
+
+  /// No description provided for @resultCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} results'**
+  String resultCount(int count);
+
+  /// No description provided for @adhanSound.
+  ///
+  /// In en, this message translates to:
+  /// **'Adhan Sound'**
+  String get adhanSound;
+
+  /// No description provided for @selectAdhanSound.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Adhan Sound'**
+  String get selectAdhanSound;
+
+  /// No description provided for @searchReciter.
+  ///
+  /// In en, this message translates to:
+  /// **'Search reciter...'**
+  String get searchReciter;
+
+  /// No description provided for @noResultsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No results found'**
+  String get noResultsFound;
+
+  /// No description provided for @appDeveloper.
+  ///
+  /// In en, this message translates to:
+  /// **'App Developer'**
+  String get appDeveloper;
+
+  /// No description provided for @reciterCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} reciters'**
+  String reciterCount(int count);
+
+  /// No description provided for @noReciterFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No reciter found'**
+  String get noReciterFound;
+
+  /// No description provided for @azkarCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'All done, praise Allah! 🎉'**
+  String get azkarCompleted;
+
+  /// No description provided for @azkarProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} / {total} done'**
+  String azkarProgress(int done, int total);
+
+  /// No description provided for @noAzkarFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No Azkar found'**
+  String get noAzkarFound;
 }
 
 class _AppLocalizationsDelegate

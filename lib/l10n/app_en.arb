@@ -181,5 +181,48 @@
   "go": "Go",
   "lastReadLabel": "Last read",
   "continueReading": "Continue reading",
-  "ayahLabel": "Verse"
+  "ayahLabel": "Verse",
+  "playerStationLabel": "Station: ",
+  "playerSurahLabel": "Surah: ",
+  "playerReciterLabel": "Reciter: ",
+  "playerCountryLabel": "Country: ",
+  "filterAll": "All",
+  "filterFavorites": "Favorites",
+  "nowPlaying": "Now Playing",
+  "noFavoriteStationsYet": "No favorite stations yet",
+  "resultCount": "{count} results",
+  "@resultCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adhanSound": "Adhan Sound",
+  "selectAdhanSound": "Select Adhan Sound",
+  "searchReciter": "Search reciter...",
+  "noResultsFound": "No results found",
+  "appDeveloper": "App Developer",
+  "reciterCount": "{count} reciters",
+  "@reciterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noReciterFound": "No reciter found",
+  "azkarCompleted": "All done, praise Allah! 🎉",
+  "azkarProgress": "{done} / {total} done",
+  "@azkarProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "noAzkarFound": "No Azkar found"
 }

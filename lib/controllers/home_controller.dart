@@ -63,7 +63,8 @@ class HomeController extends ChangeNotifier {
     final target = _adhanScheduler.scheduledTime;
     if (target == null) {
       _previousRemainingSeconds = null;
-      _countdownText = 'غير متاح';
+      _countdownText = '--:--:--';
+
       notifyListeners();
       return;
     }

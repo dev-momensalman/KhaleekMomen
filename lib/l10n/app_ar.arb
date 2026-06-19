@@ -37,15 +37,17 @@
   "aboutApplication": "حول التطبيق",
   "appVersion": "الإصدار 1.0.0",
   "dataSafety": "سلامة البيانات والخصوصية",
-  "dataSafetySubtitle": "جميع البيانات تعمل محلياً على جهازك دون مغادرته.",
-  "privacySnackbar": "خصوصيتك محمية: جميع البيانات تعالج محلياً.",
+  "dataSafetySubtitle": "جميع إحداثيات الموقع وملفات التهيئة تعمل محليًا 100% دون مغادرة جهازك.",
+  "privacySnackbar": "حماية الخصوصية: معالجة إحداثيات الموقع تتم محليًا بالكامل.",
   "nextPrayer": "الصلاة القادمة: {name}",
   "@nextPrayer": {
     "placeholders": {
-      "name": { "type": "String" }
+      "name": {
+        "type": "String"
+      }
     }
   },
-  "liveDeviceScheduler": "وقت الجهاز",
+  "liveDeviceScheduler": "جدولة وقت الجهاز المباشر",
   "recentlyPlayed": "تم تشغيله مؤخرًا",
   "exploreHub": "استكشف المحتوى",
   "islamicRadio": "الإذاعة الإسلامية",
@@ -58,7 +60,9 @@
   "resetCountersMessage": "سيتم إعادة تعيين عدادات تقدم {category} الأذكار.",
   "@resetCountersMessage": {
     "placeholders": {
-      "category": { "type": "String" }
+      "category": {
+        "type": "String"
+      }
     }
   },
   "cancel": "إلغاء",
@@ -74,23 +78,27 @@
   "qiblaDegrees": "القبلة: {degrees}° شرق الشمال",
   "@qiblaDegrees": {
     "placeholders": {
-      "degrees": { "type": "String" }
+      "degrees": {
+        "type": "String"
+      }
     }
   },
   "region": "المنطقة: {timezone}",
   "@region": {
     "placeholders": {
-      "timezone": { "type": "String" }
+      "timezone": {
+        "type": "String"
+      }
     }
   },
-  "updateCoordinates": "تحديث الموقع",
-  "noConnectionOffline": "لا يوجد اتصال بالإنترنت",
-  "cachedOfflineData": "بيانات محفوظة مسبقاً",
+  "updateCoordinates": "تحديث الإحداثيات",
+  "noConnectionOffline": "لا يوجد اتصال / غير متصل",
+  "cachedOfflineData": "بيانات مخزنة مؤقتًا",
   "liveApiSynced": "متزامن مع الخادم",
   "prayerTimesUnavailable": "مواقيت الصلاة غير متوفرة",
   "prayerTimesDefaultError": "يرجى تفعيل أذونات الموقع والاتصال بالإنترنت لحساب مواقيت الصلاة.",
   "retryFetching": "إعادة المحاولة",
-  "coordsUnavailable": "الموقع غير متوفر. لا يمكن حساب اتجاه القبلة.",
+  "coordsUnavailable": "الإحداثيات غير متوفرة. لا يمكن حساب اتجاه القبلة.",
   "fajr": "الفجر",
   "sunrise": "الشروق",
   "dhuhr": "الظهر",
@@ -115,35 +123,51 @@
   "adhanBroadcast": "بث الأذان",
   "audioPlayer": "مشغّل الصوت",
   "permissionDeniedTitle": "الإذن مطلوب",
-  "permissionDeniedBody": "تم رفض هذا الإذن. يرجى تفعيله من إعدادات التطبيق.",
+  "permissionDeniedBody": "تم رفض هذا الإذن بشكل دائم. يرجى تفعيله من إعدادات التطبيق لاستخدام هذه الميزة.",
   "openSettings": "فتح الإعدادات",
   "skip": "تخطي",
   "onboardWelcomeTitle": "أهلاً بك في خليك مؤمن",
-  "onboardWelcomeSubtitle": "رفيقك في القرآن والصلاة والأذكار — كل ما تحتاجه في تطبيق واحد.",
-  "onboardFeatureQuran": "استمع إلى القرآن بأصوات أفضل القراء",
+  "onboardWelcomeSubtitle": "رفيقك الإسلامي الشامل: قرآن كريم، أوقات صلاة دقيقة، إذاعات مباشرة وأذكار يومية — كل هذا في تطبيق واحد رائع.",
+  "onboardFeatureQuran": "استمع إلى القرآن الكريم بأصوات أفضل القراء في العالم",
   "onboardFeaturePrayer": "أوقات صلاة دقيقة مع أذان تلقائي",
-  "onboardFeatureRadio": "إذاعات إسلامية مباشرة",
-  "onboardFeatureAzkar": "أذكار الصباح والمساء والنوم",
-  "onboardLocationTitle": "موقعك لأوقات الصلاة",
-  "onboardLocationSubtitle": "نستخدم موقعك فقط لحساب أوقات الصلاة وإظهار اتجاه القبلة. لا يُشارَك مع أي جهة.",
-  "onboardWhyNeeded": "لماذا نحتاجه:",
-  "onboardLocationBullet1": "حساب مواقيت الصلاة بدقة لمدينتك",
-  "onboardLocationBullet2": "إظهار اتجاه القبلة نحو الكعبة المشرفة",
+  "onboardFeatureRadio": "إذاعات إسلامية مباشرة من جميع أنحاء العالم",
+  "onboardFeatureAzkar": "تذكيرات أذكار الصباح والمساء والنوم",
+  "onboardLocationTitle": "إذن الموقع",
+  "onboardLocationSubtitle": "نحتاج إلى موقعك لحساب أوقات الصلاة بدقة وإظهار اتجاه القبلة الصحيح لمدينتك.",
+  "onboardWhyNeeded": "لماذا نحتاجه هذا:",
+  "onboardLocationBullet1": "حساب أوقات الصلوات الخمس بناءً على إحداثياتك الجغرافية الدقيقة",
+  "onboardLocationBullet2": "عرض اتجاه بوصلة القبلة بدقة نحو الكعبة المشرفة",
+  "onboardLocationBullet3": "موقعك يُعالج محلياً 100٪ ولا يُرسَل إلى أي خادم خارجي",
   "onboardGrantLocation": "السماح بالوصول إلى الموقع",
   "onboardAdhanTitle": "أذونات الأذان",
-  "onboardAdhanSubtitle": "نحتاج إلى هذه الأذونات لكي يصلك الأذان دائماً في وقته.",
+  "onboardAdhanSubtitle": "فعّل هذه الأذونات لضمان وصول الأذان إليك في وقته دائماً.",
   "onboardNotifLabel": "إشعارات الصلاة",
-  "onboardAlarmLabel": "الأذان في وقته بالضبط",
-  "onboardBatteryLabel": "العمل في الخلفية",
+  "onboardNotifTitle": "إشعارات الصلاة",
+  "onboardNotifSubtitle": "اسمح بالإشعارات حتى ينبهك التطبيق عند دخول وقت كل صلاة، حتى حين يكون الشاشة مطفأة.",
+  "onboardNotifBullet1": "استقبال إشعار عند دخول وقت كل صلاة من الصلوات الخمس",
+  "onboardNotifBullet2": "الإشعارات تشغل صوت الأذان المختار تلقائياً",
+  "onboardNotifBullet3": "يمكنك تعطيل كل صلاة بشكل منفرد من الإعدادات",
   "onboardGrantNotif": "السماح بالإشعارات",
-  "onboardGrantAlarm": "السماح بالتنبيه",
-  "onboardGrantBattery": "إلغاء قيود الخلفية",
+  "onboardAlarmLabel": "دقة توقيت الأذان",
+  "onboardAlarmTitle": "دقة توقيت الأذان",
+  "onboardAlarmSubtitle": "يضمن رفع الأذان في وقت الصلاة بالدقيقة الدقيقة.",
+  "onboardAlarmBullet1": "الأذان يُرفع في الدقيقة المحددة بالضبط",
+  "onboardAlarmBullet2": "ضروري لضمان موثوقية مواعيد الصلاة",
+  "onboardAlarmBullet3": "بدونه قد يتأخر النظام في تشغيل إشعارات الصلاة",
+  "onboardGrantAlarm": "السماح بالتنبيه الدقيق",
+  "onboardBatteryLabel": "نشاط الخلفية",
+  "onboardBatteryTitle": "نشاط الخلفية",
+  "onboardBatterySubtitle": "يبقي الأذان يعمل حتى حين تكون الشاشة مطفأة.",
+  "onboardBatteryBullet1": "يضمن تشغيل الأذان حتى طوال الليل",
+  "onboardBatteryBullet2": "استهلاك بطارية ضئيل جداً",
+  "onboardBatteryBullet3": "يزيل فقط قيد التأخير في الخلفية",
+  "onboardGrantBattery": "إلغاء قيود البطارية",
   "onboardPermissionGranted": "تم التفعيل ✓",
   "onboardDoneTitle": "كل شيء جاهز!",
   "onboardDoneSubtitle": "خليك مؤمن جاهز. تقبل الله طاعتك وثبّتك على الصلاة.",
   "onboardDoneNotif": "إشعارات الصلاة",
   "onboardDoneAlarm": "تنبيهات الأذان",
-  "onboardDoneBattery": "الأذان في الخلفية",
+  "onboardDoneBattery": "أذان الخلفية",
   "onboardNext": "التالي",
   "onboardFinish": "ابدأ التطبيق",
   "tafsirTitle": "التفسير",
@@ -157,5 +181,48 @@
   "go": "انتقال",
   "lastReadLabel": "آخر قراءة",
   "continueReading": "متابعة القراءة",
-  "ayahLabel": "الآية"
+  "ayahLabel": "الآية",
+  "playerStationLabel": "المحطة: ",
+  "playerSurahLabel": "سورة: ",
+  "playerReciterLabel": "القارئ: ",
+  "playerCountryLabel": "الدولة: ",
+  "filterAll": "الكل",
+  "filterFavorites": "المفضلة",
+  "nowPlaying": "يُشغَّل الآن",
+  "noFavoriteStationsYet": "لا توجد محطات مفضلة بعد",
+  "resultCount": "{count} نتيجة",
+  "@resultCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adhanSound": "صوت الأذان",
+  "selectAdhanSound": "اختر صوت الأذان",
+  "searchReciter": "ابحث عن قارئ...",
+  "noResultsFound": "لا توجد نتائج",
+  "appDeveloper": "مطور البرنامج",
+  "reciterCount": "{count} قارئ",
+  "@reciterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noReciterFound": "لا يوجد قارئ بهذا الاسم",
+  "azkarCompleted": "اكتمل بحمد الله 🎉",
+  "azkarProgress": "{done} / {total} مكتمل",
+  "@azkarProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "noAzkarFound": "لا توجد أذكار"
 }

@@ -15,7 +15,7 @@ class RadioView extends StatefulWidget {
 class _RadioViewState extends State<RadioView> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  int _selectedFilter = 0; // 0=الكل، 1=المفضلة
+  int _selectedFilter = 0;
 
   @override
   void dispose() {
@@ -65,7 +65,7 @@ class _RadioViewState extends State<RadioView> {
               // Now Playing Banner
               if (radioController.activeStation != null &&
                   radioController.isAnyPlaying)
-                _buildNowPlayingBanner(context, radioController),
+                _buildNowPlayingBanner(context, radioController, l10n),
               if (radioController.activeStation != null &&
                   radioController.isAnyPlaying)
                 const SizedBox(height: 10),
@@ -161,8 +161,9 @@ class _RadioViewState extends State<RadioView> {
               // Filter Chips
               Row(
                 children: [
+                  // ✅ FIX: l10n بدل نصوص عربية ثابتة
                   _FilterChip(
-                    label: 'الكل',
+                    label: l10n.filterAll,
                     icon: Icons.radio_rounded,
                     count: radioController.stations.length,
                     selected: _selectedFilter == 0,
@@ -170,7 +171,7 @@ class _RadioViewState extends State<RadioView> {
                   ),
                   const SizedBox(width: 8),
                   _FilterChip(
-                    label: 'المفضلة',
+                    label: l10n.filterFavorites,
                     icon: Icons.favorite_rounded,
                     count: radioController.stations
                         .where((s) => radioController.isFavorite(s))
@@ -190,7 +191,8 @@ class _RadioViewState extends State<RadioView> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '${filteredStations.length} نتيجة',
+                        // ✅ FIX: resultCount من l10n
+                        l10n.resultCount(filteredStations.length),
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,
@@ -231,6 +233,7 @@ class _RadioViewState extends State<RadioView> {
   Widget _buildNowPlayingBanner(
     BuildContext context,
     RadioController controller,
+    AppLocalizations l10n,
   ) {
     final theme = Theme.of(context);
     final station = controller.activeStation!;
@@ -271,7 +274,8 @@ class _RadioViewState extends State<RadioView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'يُشغَّل الآن',
+                  // ✅ FIX: nowPlaying من l10n
+                  l10n.nowPlaying,
                   style: theme.textTheme.labelSmall
                       ?.copyWith(
                         color: const Color(0xFFE67E22),
@@ -307,7 +311,6 @@ class _RadioViewState extends State<RadioView> {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
       itemCount: 8,
-      // ✅ تم التصحيح: __ → _
       itemBuilder: (_, _) => Container(
         margin: const EdgeInsets.only(bottom: 10),
         height: 76,
@@ -335,8 +338,9 @@ class _RadioViewState extends State<RadioView> {
           ),
           const SizedBox(height: 12),
           Text(
+            // ✅ FIX: noFavoriteStationsYet من l10n
             _selectedFilter == 1
-                ? 'لا توجد محطات مفضلة بعد'
+                ? l10n.noFavoriteStationsYet
                 : l10n.noStationsMatch,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,

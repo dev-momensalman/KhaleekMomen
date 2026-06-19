@@ -7,11 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:islamic_audio_hub/l10n/app_localizations.dart';
 import 'package:islamic_audio_hub/controllers/settings_controller.dart';
 import 'package:islamic_audio_hub/core/theme/app_theme.dart';
-// ✅ تم حذف: import 'adhan_sound_option.dart' — غير مستخدم في الـ view
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Settings View
-// ══════════════════════════════════════════════════════════════════════════════
 
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key});
@@ -43,7 +38,8 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 24),
 
         // ── 2. صوت الأذان ────────────────────────────────────────────
-        _sectionHeader(context, isArabic ? 'صوت الأذان' : 'Adhan Sound'),
+        // ✅ FIX: l10n.adhanSound بدل ternary
+        _sectionHeader(context, l10n.adhanSound),
         Card(
           child: ListTile(
             leading: Container(
@@ -59,7 +55,7 @@ class SettingsView extends StatelessWidget {
                 size: 20,
               ),
             ),
-            title: Text(isArabic ? 'صوت الأذان' : 'Adhan Sound'),
+            title: Text(l10n.adhanSound),
             subtitle: Text(
               ctrl.selectedAdhan.displayName,
               style: TextStyle(color: theme.colorScheme.primary),
@@ -150,7 +146,8 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 16),
 
         // ── 5. مطور البرنامج ─────────────────────────────────────────
-        _sectionHeader(context, isArabic ? 'مطور البرنامج' : 'App Developer'),
+        // ✅ FIX: l10n.appDeveloper بدل ternary
+        _sectionHeader(context, l10n.appDeveloper),
         _DevCard(isArabic: isArabic),
         const SizedBox(height: 100),
       ],
@@ -225,6 +222,7 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final ctrl = Provider.of<SettingsController>(context);
 
     final filtered = ctrl.availableAdhans
@@ -261,7 +259,8 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'اختر صوت الأذان',
+                  // ✅ FIX: l10n.selectAdhanSound بدل نص عربي ثابت
+                  l10n.selectAdhanSound,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -283,7 +282,8 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
               onChanged: (v) => setState(() => _query = v),
               textDirection: TextDirection.rtl,
               decoration: InputDecoration(
-                hintText: 'ابحث عن قارئ...',
+                // ✅ FIX: l10n.searchReciter بدل نص عربي ثابت
+                hintText: l10n.searchReciter,
                 hintTextDirection: TextDirection.rtl,
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: _query.isNotEmpty
@@ -311,7 +311,8 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
             child: filtered.isEmpty
                 ? Center(
                     child: Text(
-                      'لا توجد نتائج',
+                      // ✅ FIX: l10n.noResultsFound بدل نص عربي ثابت
+                      l10n.noResultsFound,
                       style: TextStyle(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -408,6 +409,7 @@ class _DevCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
 
     return Card(
       elevation: 0,
@@ -505,7 +507,8 @@ class _DevCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isArabic ? 'مطور البرنامج' : 'App Developer',
+                      // ✅ FIX: l10n.appDeveloper بدل ternary
+                      l10n.appDeveloper,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.2,
@@ -634,7 +637,6 @@ class _DevDialog extends StatelessWidget {
               clipBehavior: Clip.none,
               alignment: Alignment.bottomCenter,
               children: [
-                // Gradient banner
                 Container(
                   height: 110,
                   decoration: BoxDecoration(
@@ -676,7 +678,6 @@ class _DevDialog extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Floating avatar
                 Positioned(
                   bottom: -40,
                   child: Container(
@@ -711,7 +712,6 @@ class _DevDialog extends StatelessWidget {
 
             const SizedBox(height: 52),
 
-            // ── Title ────────────────────────────────────────────────
             Text(
               _t(ar: 'مطور البرنامج', en: 'App Developer'),
               style: theme.textTheme.titleLarge?.copyWith(
@@ -737,7 +737,6 @@ class _DevDialog extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // ── Action Buttons ───────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
@@ -798,7 +797,6 @@ class _DevDialog extends StatelessWidget {
             const SizedBox(height: 20),
             const Divider(height: 1),
 
-            // ── Close ────────────────────────────────────────────────
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Padding(

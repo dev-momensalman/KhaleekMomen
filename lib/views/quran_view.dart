@@ -1,3 +1,5 @@
+// lib/views/quran_view.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:islamic_audio_hub/l10n/app_localizations.dart';
@@ -87,7 +89,8 @@ class _QuranViewState extends State<QuranView> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    '${filteredSurahs.length} نتيجة',
+                    // ✅ FIX: l10n بدل '${filteredSurahs.length} نتيجة'
+                    l10n.resultCount(filteredSurahs.length),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.bold,
@@ -441,8 +444,9 @@ class _QuranViewState extends State<QuranView> {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Reciters Modal — مع بحث وتصميم محسّن
+// Reciters Modal
 // ─────────────────────────────────────────────────────────────────
+
 class _RecitersModal extends StatefulWidget {
   final QuranController controller;
   const _RecitersModal({required this.controller});
@@ -532,7 +536,8 @@ class _RecitersModalState extends State<_RecitersModal> {
                             .merge(AppTheme.uiTextStyle),
                       ),
                       Text(
-                        '${widget.controller.reciters.length} قارئ',
+                        // ✅ FIX: l10n بدل '${...} قارئ'
+                        l10n.reciterCount(widget.controller.reciters.length),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -557,7 +562,8 @@ class _RecitersModalState extends State<_RecitersModal> {
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: 'ابحث عن قارئ...',
+                // ✅ FIX: l10n بدل 'ابحث عن قارئ...'
+                hintText: l10n.searchReciter,
                 hintStyle: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant.withValues(
                     alpha: 0.6,
@@ -624,7 +630,8 @@ class _RecitersModalState extends State<_RecitersModal> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      '${filtered.length} نتيجة',
+                      // ✅ FIX: l10n بدل '${filtered.length} نتيجة'
+                      l10n.resultCount(filtered.length),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.primary,
                         fontWeight: FontWeight.bold,
@@ -653,7 +660,8 @@ class _RecitersModalState extends State<_RecitersModal> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'لا يوجد قارئ بهذا الاسم',
+                          // ✅ FIX: l10n بدل 'لا يوجد قارئ بهذا الاسم'
+                          l10n.noReciterFound,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -664,7 +672,7 @@ class _RecitersModalState extends State<_RecitersModal> {
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                     itemCount: filtered.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 4),
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
                     itemBuilder: (context, index) {
                       final reciter = filtered[index];
                       final isSelected =

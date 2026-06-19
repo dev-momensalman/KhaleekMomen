@@ -17,7 +17,6 @@ class _AzkarViewState extends State<AzkarView>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // ✅ الفئات الأربعة ثابتة — مش محتاجين Provider في initState
   static const _categories = ['morning', 'evening', 'sleep', 'general'];
 
   @override
@@ -132,6 +131,20 @@ class _CategoryPage extends StatelessWidget {
     required this.l10n,
   });
 
+  // ✅ FIX: اسم الفئة بالغة المختارة بدل _arabicName()
+  String _localizedName(String cat) {
+    switch (cat) {
+      case 'morning':
+        return l10n.morningAzkar;
+      case 'evening':
+        return l10n.eveningAzkar;
+      case 'sleep':
+        return l10n.sleepAzkar;
+      default:
+        return l10n.generalAzkar;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -171,9 +184,10 @@ class _CategoryPage extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
+                        // ✅ FIX: l10n بدل نصوص عربية ثابتة
                         allDone
-                            ? 'اكتمل بحمد الله 🎉'
-                            : '$doneCount / $total مكتمل',
+                            ? l10n.azkarCompleted
+                            : l10n.azkarProgress(doneCount, total),
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: allDone
                               ? theme.colorScheme.primary
@@ -223,7 +237,8 @@ class _CategoryPage extends StatelessWidget {
           child: items.isEmpty
               ? Center(
                   child: Text(
-                    'لا توجد أذكار',
+                    // ✅ FIX: l10n.noAzkarFound
+                    l10n.noAzkarFound,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -250,7 +265,8 @@ class _CategoryPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.resetCountersTitle),
-        content: Text(l10n.resetCountersMessage(_arabicName(category))),
+        // ✅ FIX: _localizedName() بدل _arabicName() — اسم الفئة بلغة المستخدم
+        content: Text(l10n.resetCountersMessage(_localizedName(category))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -269,18 +285,5 @@ class _CategoryPage extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _arabicName(String cat) {
-    switch (cat) {
-      case 'morning':
-        return 'أذكار الصباح';
-      case 'evening':
-        return 'أذكار المساء';
-      case 'sleep':
-        return 'أذكار النوم';
-      default:
-        return 'أذكار عامة';
-    }
   }
 }

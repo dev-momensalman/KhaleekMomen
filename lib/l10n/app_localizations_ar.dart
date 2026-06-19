@@ -125,10 +125,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dataSafetySubtitle =>
-      'جميع البيانات تعمل محلياً على جهازك دون مغادرته.';
+      'جميع إحداثيات الموقع وملفات التهيئة تعمل محليًا 100% دون مغادرة جهازك.';
 
   @override
-  String get privacySnackbar => 'خصوصيتك محمية: جميع البيانات تعالج محلياً.';
+  String get privacySnackbar =>
+      'حماية الخصوصية: معالجة إحداثيات الموقع تتم محليًا بالكامل.';
 
   @override
   String nextPrayer(String name) {
@@ -136,7 +137,7 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get liveDeviceScheduler => 'وقت الجهاز';
+  String get liveDeviceScheduler => 'جدولة وقت الجهاز المباشر';
 
   @override
   String get recentlyPlayed => 'تم تشغيله مؤخرًا';
@@ -211,13 +212,13 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get updateCoordinates => 'تحديث الموقع';
+  String get updateCoordinates => 'تحديث الإحداثيات';
 
   @override
-  String get noConnectionOffline => 'لا يوجد اتصال بالإنترنت';
+  String get noConnectionOffline => 'لا يوجد اتصال / غير متصل';
 
   @override
-  String get cachedOfflineData => 'بيانات محفوظة مسبقاً';
+  String get cachedOfflineData => 'بيانات مخزنة مؤقتًا';
 
   @override
   String get liveApiSynced => 'متزامن مع الخادم';
@@ -234,7 +235,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get coordsUnavailable =>
-      'الموقع غير متوفر. لا يمكن حساب اتجاه القبلة.';
+      'الإحداثيات غير متوفرة. لا يمكن حساب اتجاه القبلة.';
 
   @override
   String get fajr => 'الفجر';
@@ -312,7 +313,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get permissionDeniedBody =>
-      'تم رفض هذا الإذن. يرجى تفعيله من إعدادات التطبيق.';
+      'تم رفض هذا الإذن بشكل دائم. يرجى تفعيله من إعدادات التطبيق لاستخدام هذه الميزة.';
 
   @override
   String get openSettings => 'فتح الإعدادات';
@@ -325,39 +326,43 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get onboardWelcomeSubtitle =>
-      'رفيقك في القرآن والصلاة والأذكار — كل ما تحتاجه في تطبيق واحد.';
+      'رفيقك الإسلامي الشامل: قرآن كريم، أوقات صلاة دقيقة، إذاعات مباشرة وأذكار يومية — كل هذا في تطبيق واحد رائع.';
 
   @override
-  String get onboardFeatureQuran => 'استمع إلى القرآن بأصوات أفضل القراء';
+  String get onboardFeatureQuran =>
+      'استمع إلى القرآن الكريم بأصوات أفضل القراء في العالم';
 
   @override
   String get onboardFeaturePrayer => 'أوقات صلاة دقيقة مع أذان تلقائي';
 
   @override
-  String get onboardFeatureRadio => 'إذاعات إسلامية مباشرة';
+  String get onboardFeatureRadio =>
+      'إذاعات إسلامية مباشرة من جميع أنحاء العالم';
 
   @override
-  String get onboardFeatureAzkar => 'أذكار الصباح والمساء والنوم';
+  String get onboardFeatureAzkar => 'تذكيرات أذكار الصباح والمساء والنوم';
 
   @override
-  String get onboardLocationTitle => 'موقعك لأوقات الصلاة';
+  String get onboardLocationTitle => 'إذن الموقع';
 
   @override
   String get onboardLocationSubtitle =>
-      'نستخدم موقعك فقط لحساب أوقات الصلاة وإظهار اتجاه القبلة. لا يُشارَك مع أي جهة.';
+      'نحتاج إلى موقعك لحساب أوقات الصلاة بدقة وإظهار اتجاه القبلة الصحيح لمدينتك.';
 
   @override
-  String get onboardWhyNeeded => 'لماذا نحتاجه:';
+  String get onboardWhyNeeded => 'لماذا نحتاجه هذا:';
 
   @override
-  String get onboardLocationBullet1 => 'حساب مواقيت الصلاة بدقة لمدينتك';
+  String get onboardLocationBullet1 =>
+      'حساب أوقات الصلوات الخمس بناءً على إحداثياتك الجغرافية الدقيقة';
 
   @override
-  String get onboardLocationBullet2 => 'إظهار اتجاه القبلة نحو الكعبة المشرفة';
+  String get onboardLocationBullet2 =>
+      'عرض اتجاه بوصلة القبلة بدقة نحو الكعبة المشرفة';
 
   @override
   String get onboardLocationBullet3 =>
-      'Your location is processed locally — never uploaded';
+      'موقعك يُعالج محلياً 100٪ ولا يُرسَل إلى أي خادم خارجي';
 
   @override
   String get onboardGrantLocation => 'السماح بالوصول إلى الموقع';
@@ -367,77 +372,77 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get onboardAdhanSubtitle =>
-      'نحتاج إلى هذه الأذونات لكي يصلك الأذان دائماً في وقته.';
+      'فعّل هذه الأذونات لضمان وصول الأذان إليك في وقته دائماً.';
 
   @override
   String get onboardNotifLabel => 'إشعارات الصلاة';
 
   @override
-  String get onboardNotifTitle => 'Prayer Notifications';
+  String get onboardNotifTitle => 'إشعارات الصلاة';
 
   @override
-  String get onboardNotifSubtitle => 'Get notified at each prayer time.';
+  String get onboardNotifSubtitle =>
+      'اسمح بالإشعارات حتى ينبهك التطبيق عند دخول وقت كل صلاة، حتى حين يكون الشاشة مطفأة.';
 
   @override
   String get onboardNotifBullet1 =>
-      'Receive a notification at each prayer time';
+      'استقبال إشعار عند دخول وقت كل صلاة من الصلوات الخمس';
 
   @override
-  String get onboardNotifBullet2 => 'Plays your selected Adhan automatically';
+  String get onboardNotifBullet2 =>
+      'الإشعارات تشغل صوت الأذان المختار تلقائياً';
 
   @override
   String get onboardNotifBullet3 =>
-      'Disable individual prayers anytime from Settings';
+      'يمكنك تعطيل كل صلاة بشكل منفرد من الإعدادات';
 
   @override
   String get onboardGrantNotif => 'السماح بالإشعارات';
 
   @override
-  String get onboardAlarmLabel => 'الأذان في وقته بالضبط';
+  String get onboardAlarmLabel => 'دقة توقيت الأذان';
 
   @override
-  String get onboardAlarmTitle => 'Precise Adhan Timing';
+  String get onboardAlarmTitle => 'دقة توقيت الأذان';
 
   @override
   String get onboardAlarmSubtitle =>
-      'Ensures the Adhan fires at the exact prayer time.';
+      'يضمن رفع الأذان في وقت الصلاة بالدقيقة الدقيقة.';
 
   @override
-  String get onboardAlarmBullet1 => 'Adhan fires at the exact minute, not late';
+  String get onboardAlarmBullet1 => 'الأذان يُرفع في الدقيقة المحددة بالضبط';
 
   @override
-  String get onboardAlarmBullet2 =>
-      'Required for reliable prayer time delivery';
+  String get onboardAlarmBullet2 => 'ضروري لضمان موثوقية مواعيد الصلاة';
 
   @override
   String get onboardAlarmBullet3 =>
-      'Without this, notifications may be delayed';
+      'بدونه قد يتأخر النظام في تشغيل إشعارات الصلاة';
 
   @override
-  String get onboardGrantAlarm => 'السماح بالتنبيه';
+  String get onboardGrantAlarm => 'السماح بالتنبيه الدقيق';
 
   @override
-  String get onboardBatteryLabel => 'العمل في الخلفية';
+  String get onboardBatteryLabel => 'نشاط الخلفية';
 
   @override
-  String get onboardBatteryTitle => 'Background Activity';
+  String get onboardBatteryTitle => 'نشاط الخلفية';
 
   @override
   String get onboardBatterySubtitle =>
-      'Keep the Adhan working even when the screen is off.';
+      'يبقي الأذان يعمل حتى حين تكون الشاشة مطفأة.';
 
   @override
-  String get onboardBatteryBullet1 => 'Ensures the Adhan plays even overnight';
+  String get onboardBatteryBullet1 => 'يضمن تشغيل الأذان حتى طوال الليل';
 
   @override
-  String get onboardBatteryBullet2 => 'Minimal battery impact';
+  String get onboardBatteryBullet2 => 'استهلاك بطارية ضئيل جداً';
 
   @override
-  String get onboardBatteryBullet3 =>
-      'Only removes the background delay restriction';
+  String get onboardBatteryBullet3 => 'يزيل فقط قيد التأخير في الخلفية';
 
   @override
-  String get onboardGrantBattery => 'إلغاء قيود الخلفية';
+  String get onboardGrantBattery => 'إلغاء قيود البطارية';
 
   @override
   String get onboardPermissionGranted => 'تم التفعيل ✓';
@@ -456,7 +461,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get onboardDoneAlarm => 'تنبيهات الأذان';
 
   @override
-  String get onboardDoneBattery => 'الأذان في الخلفية';
+  String get onboardDoneBattery => 'أذان الخلفية';
 
   @override
   String get onboardNext => 'التالي';
@@ -500,4 +505,67 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get ayahLabel => 'الآية';
+
+  @override
+  String get playerStationLabel => 'المحطة: ';
+
+  @override
+  String get playerSurahLabel => 'سورة: ';
+
+  @override
+  String get playerReciterLabel => 'القارئ: ';
+
+  @override
+  String get playerCountryLabel => 'الدولة: ';
+
+  @override
+  String get filterAll => 'الكل';
+
+  @override
+  String get filterFavorites => 'المفضلة';
+
+  @override
+  String get nowPlaying => 'يُشغَّل الآن';
+
+  @override
+  String get noFavoriteStationsYet => 'لا توجد محطات مفضلة بعد';
+
+  @override
+  String resultCount(int count) {
+    return '$count نتيجة';
+  }
+
+  @override
+  String get adhanSound => 'صوت الأذان';
+
+  @override
+  String get selectAdhanSound => 'اختر صوت الأذان';
+
+  @override
+  String get searchReciter => 'ابحث عن قارئ...';
+
+  @override
+  String get noResultsFound => 'لا توجد نتائج';
+
+  @override
+  String get appDeveloper => 'مطور البرنامج';
+
+  @override
+  String reciterCount(int count) {
+    return '$count قارئ';
+  }
+
+  @override
+  String get noReciterFound => 'لا يوجد قارئ بهذا الاسم';
+
+  @override
+  String get azkarCompleted => 'اكتمل بحمد الله 🎉';
+
+  @override
+  String azkarProgress(int done, int total) {
+    return '$done / $total مكتمل';
+  }
+
+  @override
+  String get noAzkarFound => 'لا توجد أذكار';
 }

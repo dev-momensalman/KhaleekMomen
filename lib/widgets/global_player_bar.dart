@@ -40,24 +40,23 @@ class GlobalPlayerBar extends StatelessWidget {
                   ? state.subtitle!
                   : _getModeSubtitle(context, state.mode));
 
-        // ── Label الصف الأول حسب الوضع ───────────────────────────
+        // ✅ FIX: Labels حسب اللغة المختارة
         final String titleLabel;
         if (isAdhan) {
           titleLabel = '';
         } else if (isRadio) {
-          titleLabel = 'المحطة: ';
+          titleLabel = l10n.playerStationLabel;
         } else {
-          titleLabel = 'سورة: ';
+          titleLabel = l10n.playerSurahLabel;
         }
 
-        // ── Label الصف الثاني حسب الوضع ──────────────────────────
         final String subtitleLabel;
         if (isAdhan) {
           subtitleLabel = '';
         } else if (isRadio) {
-          subtitleLabel = 'الدولة: ';
+          subtitleLabel = l10n.playerCountryLabel;
         } else {
-          subtitleLabel = 'القارئ: ';
+          subtitleLabel = l10n.playerReciterLabel;
         }
 
         return Padding(

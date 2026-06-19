@@ -503,4 +503,67 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ayahLabel => 'Verse';
+
+  @override
+  String get playerStationLabel => 'Station: ';
+
+  @override
+  String get playerSurahLabel => 'Surah: ';
+
+  @override
+  String get playerReciterLabel => 'Reciter: ';
+
+  @override
+  String get playerCountryLabel => 'Country: ';
+
+  @override
+  String get filterAll => 'All';
+
+  @override
+  String get filterFavorites => 'Favorites';
+
+  @override
+  String get nowPlaying => 'Now Playing';
+
+  @override
+  String get noFavoriteStationsYet => 'No favorite stations yet';
+
+  @override
+  String resultCount(int count) {
+    return '$count results';
+  }
+
+  @override
+  String get adhanSound => 'Adhan Sound';
+
+  @override
+  String get selectAdhanSound => 'Select Adhan Sound';
+
+  @override
+  String get searchReciter => 'Search reciter...';
+
+  @override
+  String get noResultsFound => 'No results found';
+
+  @override
+  String get appDeveloper => 'App Developer';
+
+  @override
+  String reciterCount(int count) {
+    return '$count reciters';
+  }
+
+  @override
+  String get noReciterFound => 'No reciter found';
+
+  @override
+  String get azkarCompleted => 'All done, praise Allah! 🎉';
+
+  @override
+  String azkarProgress(int done, int total) {
+    return '$done / $total done';
+  }
+
+  @override
+  String get noAzkarFound => 'No Azkar found';
 }
