@@ -73,7 +73,7 @@ class _HomeViewState extends State<HomeView> with TickerProviderStateMixin {
                 pulseAnim: _countdownPulse,
                 l10n: l10n,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
 
               // ── 2. Last Played ─────────────────────────────────
               if (homeController.lastPlayed != null) ...[

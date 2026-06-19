@@ -1,6 +1,10 @@
+// lib/controllers/prayer_controller.dart
+
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:islamic_audio_hub/core/services/location_service.dart';
 import 'package:islamic_audio_hub/core/services/prayer_service.dart';
@@ -17,6 +21,14 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
   String? _errorMessage;
   bool _isOfflineUsingCache = false;
   Timer? _dayChangeTimer;
+
+  // ── City Name ──────────────────────────────────────────────────────────────
+  String? _cityName;
+  double? _lastLat;
+  double? _lastLng;
+  String _lastLocale = '';
+
+  String? get cityName => _cityName;
 
   PrayerController(
     this._prayerService,
@@ -45,11 +57,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       _todayTimes = cache;
       _isOfflineUsingCache = !_prayerService.hasValidCacheForToday();
 
-      // BUG FIX: Defer scheduleNextAdhan to AFTER the first frame.
-      // Calling it synchronously here triggers AdhanScheduler.notifyListeners()
-      // → HomeController._updateCountdown() → HomeController.notifyListeners()
-      // while the widget tree is still being built → "setState() called during build".
-      // addPostFrameCallback guarantees execution after the first layout/paint.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_adhanScheduler.scheduleNextAdhan(cache));
       });
@@ -98,7 +105,7 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     super.dispose();
   }
 
-  Future fetchPrayerTimes({bool force = false}) async {
+  Future<void> fetchPrayerTimes({bool force = false}) async {
     final hasValidCache = _prayerService.hasValidCacheForToday();
 
     if (force || !hasValidCache || _todayTimes == null) {
@@ -129,6 +136,15 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       );
 
       unawaited(_adhanScheduler.scheduleNextAdhan(times));
+
+      // Fetch city name using last known locale (or default 'ar')
+      unawaited(
+        _fetchCityName(
+          position.latitude,
+          position.longitude,
+          locale: _lastLocale.isNotEmpty ? _lastLocale : 'ar',
+        ),
+      );
     } on LocationServiceDisabledException catch (e) {
       _errorMessage = (force || _todayTimes == null) ? e.message : null;
       _handleOfflineOrFailedFetch();
@@ -164,6 +180,78 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       } else {
         unawaited(_adhanScheduler.scheduleNextAdhan(null));
       }
+    }
+  }
+
+  // ── Refresh city name when app language changes ───────────────────────────
+
+  /// Call this from the View whenever the app locale changes.
+  void refreshCityNameForLocale(String locale) {
+    if (locale == _lastLocale) return; // no change
+    if (_lastLat == null || _lastLng == null) {
+      _lastLocale = locale;
+      return;
+    }
+    _cityName = null;
+    notifyListeners();
+    unawaited(_fetchCityName(_lastLat!, _lastLng!, locale: locale));
+  }
+
+  // ── Reverse Geocoding (Nominatim — no API key required) ──────────────────
+
+  Future<void> _fetchCityName(
+    double lat,
+    double lng, {
+    String locale = 'ar',
+  }) async {
+    _lastLat = lat;
+    _lastLng = lng;
+    _lastLocale = locale;
+
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?format=json&lat=$lat&lon=$lng&accept-language=$locale&zoom=10',
+      );
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'KhaleekMomen/1.0'})
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final address = data['address'] as Map<String, dynamic>?;
+        if (address != null) {
+          final city =
+              address['city'] as String? ??
+              address['town'] as String? ??
+              address['municipality'] as String? ??
+              address['county'] as String? ??
+              address['state'] as String?;
+          if (city != null && city.isNotEmpty) {
+            _cityName = city;
+            developer.log(
+              'City ($locale): $_cityName',
+              name: 'PrayerController',
+            );
+            notifyListeners();
+            return;
+          }
+        }
+      }
+      _fallbackCityFromTimezone();
+    } catch (e) {
+      developer.log('City name fetch failed: $e', name: 'PrayerController');
+      _fallbackCityFromTimezone();
+    }
+  }
+
+  void _fallbackCityFromTimezone() {
+    if (_cityName != null) return;
+    if (_todayTimes == null) return;
+    final tz = _todayTimes!.timezone;
+    if (tz.contains('/')) {
+      _cityName = tz.split('/').last.replaceAll('_', ' ');
+      notifyListeners();
     }
   }
 }
