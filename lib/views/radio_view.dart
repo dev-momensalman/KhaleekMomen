@@ -32,8 +32,8 @@ class _RadioViewState extends State<RadioView> {
 
     final allStations = _selectedFilter == 1
         ? radioController.stations
-            .where((s) => radioController.isFavorite(s))
-            .toList()
+              .where((s) => radioController.isFavorite(s))
+              .toList()
         : radioController.stations;
 
     final filteredStations = allStations.where((station) {
@@ -63,11 +63,10 @@ class _RadioViewState extends State<RadioView> {
           child: Column(
             children: [
               // Now Playing Banner
-              if (radioController.activeStation  != null &&
+              if (radioController.activeStation != null &&
                   radioController.isAnyPlaying)
                 _buildNowPlayingBanner(context, radioController),
-
-              if (radioController.activeStation  != null &&
+              if (radioController.activeStation != null &&
                   radioController.isAnyPlaying)
                 const SizedBox(height: 10),
 
@@ -80,13 +79,15 @@ class _RadioViewState extends State<RadioView> {
                       decoration: InputDecoration(
                         hintText: l10n.searchRadioStations,
                         hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.6),
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.6,
+                          ),
                         ),
                         prefixIcon: Icon(
                           Icons.search_rounded,
-                          color: theme.colorScheme.primary
-                              .withValues(alpha: 0.7),
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                         suffixIcon: _searchQuery.isNotEmpty
                             ? IconButton(
@@ -108,8 +109,9 @@ class _RadioViewState extends State<RadioView> {
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide(
-                            color: theme.colorScheme.outlineVariant
-                                .withValues(alpha: 0.4),
+                            color: theme.colorScheme.outlineVariant.withValues(
+                              alpha: 0.4,
+                            ),
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
@@ -120,7 +122,9 @@ class _RadioViewState extends State<RadioView> {
                           ),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
-                            vertical: 12, horizontal: 16),
+                          vertical: 12,
+                          horizontal: 16,
+                        ),
                       ),
                       onChanged: (v) => setState(() => _searchQuery = v),
                     ),
@@ -178,7 +182,9 @@ class _RadioViewState extends State<RadioView> {
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(20),
@@ -203,20 +209,19 @@ class _RadioViewState extends State<RadioView> {
           child: radioController.isLoading
               ? _buildShimmer(theme)
               : radioController.errorMessage != null
-                  ? _buildErrorWidget(radioController, l10n)
-                  : filteredStations.isEmpty
-                      ? _buildEmptyState(context, l10n)
-                      : ListView.builder(
-                          itemCount: filteredStations.length,
-                          padding:
-                              const EdgeInsets.fromLTRB(12, 8, 12, 100),
-                          itemBuilder: (context, index) {
-                            return StationCard(
-                              station: filteredStations[index],
-                              controller: radioController,
-                            );
-                          },
-                        ),
+              ? _buildErrorWidget(radioController, l10n)
+              : filteredStations.isEmpty
+              ? _buildEmptyState(context, l10n)
+              : ListView.builder(
+                  itemCount: filteredStations.length,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
+                  itemBuilder: (context, index) {
+                    return StationCard(
+                      station: filteredStations[index],
+                      controller: radioController,
+                    );
+                  },
+                ),
         ),
       ],
     );
@@ -224,9 +229,11 @@ class _RadioViewState extends State<RadioView> {
 
   // ── Now Playing Banner ─────────────────────────────────────────
   Widget _buildNowPlayingBanner(
-      BuildContext context, RadioController controller) {
+    BuildContext context,
+    RadioController controller,
+  ) {
     final theme = Theme.of(context);
-    final station = controller.activeStation !;
+    final station = controller.activeStation!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -245,7 +252,6 @@ class _RadioViewState extends State<RadioView> {
       ),
       child: Row(
         children: [
-          // Animated wave icon
           Container(
             width: 38,
             height: 38,
@@ -266,16 +272,18 @@ class _RadioViewState extends State<RadioView> {
               children: [
                 Text(
                   'يُشغَّل الآن',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: const Color(0xFFE67E22),
-                    fontWeight: FontWeight.bold,
-                  ).merge(AppTheme.uiTextStyle),
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(
+                        color: const Color(0xFFE67E22),
+                        fontWeight: FontWeight.bold,
+                      )
+                      .merge(AppTheme.uiTextStyle),
                 ),
                 Text(
                   station.name,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ).merge(AppTheme.uiTextStyle),
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)
+                      .merge(AppTheme.uiTextStyle),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -287,8 +295,7 @@ class _RadioViewState extends State<RadioView> {
             color: const Color(0xFFE67E22),
             onPressed: () => controller.stopStation(),
             padding: EdgeInsets.zero,
-            constraints:
-                const BoxConstraints(minWidth: 36, minHeight: 36),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
         ],
       ),
@@ -300,7 +307,8 @@ class _RadioViewState extends State<RadioView> {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
       itemCount: 8,
-      itemBuilder: (_, __) => Container(
+      // ✅ تم التصحيح: __ → _
+      itemBuilder: (_, _) => Container(
         margin: const EdgeInsets.only(bottom: 10),
         height: 76,
         decoration: BoxDecoration(
@@ -323,8 +331,7 @@ class _RadioViewState extends State<RadioView> {
                 ? Icons.favorite_border_rounded
                 : Icons.search_off_rounded,
             size: 56,
-            color:
-                theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
           ),
           const SizedBox(height: 12),
           Text(
@@ -341,8 +348,7 @@ class _RadioViewState extends State<RadioView> {
   }
 
   // ── Error Widget ───────────────────────────────────────────────
-  Widget _buildErrorWidget(
-      RadioController controller, AppLocalizations l10n) {
+  Widget _buildErrorWidget(RadioController controller, AppLocalizations l10n) {
     final theme = Theme.of(context);
     return Center(
       child: Padding(
@@ -357,19 +363,26 @@ class _RadioViewState extends State<RadioView> {
                 color: theme.colorScheme.errorContainer,
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.wifi_off_rounded,
-                  size: 34, color: theme.colorScheme.error),
+              child: Icon(
+                Icons.wifi_off_rounded,
+                size: 34,
+                color: theme.colorScheme.error,
+              ),
             ),
             const SizedBox(height: 16),
-            Text(l10n.connectionError,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              l10n.connectionError,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 6),
             Text(
               controller.errorMessage!,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant),
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
@@ -407,8 +420,7 @@ class _FilterChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: selected
               ? theme.colorScheme.primary
@@ -437,8 +449,7 @@ class _FilterChip extends StatelessWidget {
                 color: selected
                     ? Colors.white
                     : theme.colorScheme.onSurfaceVariant,
-                fontWeight:
-                    selected ? FontWeight.bold : FontWeight.normal,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
               ),
             ),
           ],
