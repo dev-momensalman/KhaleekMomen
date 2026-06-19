@@ -1,3 +1,5 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,7 +14,7 @@ import 'package:islamic_audio_hub/core/services/quran_service.dart';
 import 'package:islamic_audio_hub/core/services/azkar_service.dart';
 import 'package:islamic_audio_hub/core/services/adhan_scheduler.dart';
 import 'package:islamic_audio_hub/core/services/notification_service.dart';
-import 'package:islamic_audio_hub/core/services/adhan_work_manager.dart'; // ✅ NEW
+import 'package:islamic_audio_hub/core/services/adhan_work_manager.dart';
 
 // Controllers
 import 'package:islamic_audio_hub/controllers/settings_controller.dart';
@@ -28,19 +30,16 @@ import 'package:islamic_audio_hub/views/onboarding/onboarding_view.dart';
 import 'package:islamic_audio_hub/core/theme/app_theme.dart';
 import 'package:islamic_audio_hub/l10n/app_localizations.dart';
 
-// ─── BOOT RULE: main() must ONLY contain ensureInitialized + runApp ──────────
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  State createState() => _MyAppState();
+  State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
@@ -64,14 +63,14 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _bootstrap() async {
-    // ── 1. Hive storage ───────────────────────────────────────────────────────
+    // ── 1. Hive storage ───────────────────────────────────────────────────
     try {
       await StorageService.init();
     } catch (e) {
       debugPrint('[Boot] Storage init failed: $e');
     }
 
-    // ── 2. OS Prayer Notifications ────────────────────────────────────────────
+    // ── 2. OS Prayer Notifications ────────────────────────────────────────
     try {
       await NotificationService.init();
       await NotificationService.checkAndRequestBatteryOptimization();
@@ -79,22 +78,21 @@ class _MyAppState extends State<MyApp> {
       debugPrint('[Boot] Notification service init failed: $e');
     }
 
-    // ── 3. Background WorkManager (daily adhan reschedule) ────────────────────
-    // ✅ NEW: يجدد جدولة الأذان كل 12 ساعة حتى لو التطبيق مهجور
+    // ── 3. Background WorkManager ─────────────────────────────────────────
     try {
       await registerAdhanWorker();
     } catch (e) {
       debugPrint('[Boot] WorkManager registration failed: $e');
     }
 
-    // ── 4. Background audio engine ────────────────────────────────────────────
+    // ── 4. Background audio engine ────────────────────────────────────────
     try {
       await AudioServiceWrapper.init();
     } catch (e) {
       debugPrint('[Boot] Audio init failed: $e');
     }
 
-    // ── 5. Create services AFTER init() has run ───────────────────────────────
+    // ── 5. Create services ────────────────────────────────────────────────
     _httpService = HttpService(baseUrl: 'https://mp3quran.net');
     _locationService = LocationService();
     _storageService = StorageService();
@@ -103,11 +101,15 @@ class _MyAppState extends State<MyApp> {
       HttpService(baseUrl: 'https://api.aladhan.com/v1'),
       _storageService!,
     );
-    // ✅ بعد
     _radioService = RadioService();
     _quranService = QuranService(_httpService!);
     _azkarService = AzkarService();
     _adhanScheduler = AdhanScheduler(_audioService!, _storageService!);
+
+    // ✅ FIX 1: يحمّل كاش الأذان فوراً قبل ما تتبني الـ UI
+    // → scheduledTime يكون محدد من أول ما HomeView تظهر
+    // → يحل مشكلة "غير متاح" عند إعادة فتح التطبيق
+    _adhanScheduler!.rescheduleFromCache();
 
     if (mounted) {
       final showOnboarding = !(_storageService?.isOnboardingCompleted ?? false);
@@ -140,16 +142,21 @@ class _MyAppState extends State<MyApp> {
 
     return MultiProvider(
       providers: [
-        Provider.value(value: storage),
-        Provider.value(value: audio),
-        ChangeNotifierProvider.value(value: scheduler),
+        Provider<StorageService>.value(value: storage),
+        Provider<AudioServiceWrapper>.value(value: audio),
+        ChangeNotifierProvider<AdhanScheduler>.value(value: scheduler),
 
         ChangeNotifierProvider<SettingsController>(
           create: (_) => SettingsController(storage, scheduler, audio),
         ),
+
+        // ✅ FIX 2: lazy: false — ينشأ فوراً ولا ينتظر تاب الصلاة
+        // → يضمن تحميل الكاش وجدولة الأذان في أول فريم
         ChangeNotifierProvider<PrayerController>(
+          lazy: false,
           create: (_) => PrayerController(prayer, location, scheduler),
         ),
+
         ChangeNotifierProvider<RadioController>(
           create: (_) {
             final ctrl = RadioController(radio, storage, audio);

@@ -1,3 +1,5 @@
+// lib/core/services/adhan_scheduler.dart
+
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:flutter/widgets.dart';
@@ -15,9 +17,11 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
   Timer? _prayerTimer;
   DateTime? _scheduledTime;
-  String? _scheduledPrayerName; // English key — internal use only
+  String? _scheduledPrayerName;
 
-  // BUG FIX #2: Arabic prayer names map for UI display & notification titles.
+  // ✅ FIX: يُفرّق بين "جاري التحميل" و"غير متاح حقاً"
+  bool _hasBeenScheduled = false;
+
   static const Map<String, String> _arabicNames = {
     'Fajr': 'الفجر',
     'Dhuhr': 'الظهر',
@@ -33,10 +37,12 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
   }
 
-  // ── PUBLIC API ────────────────────────────────────────────────────────────
+  // ── PUBLIC API ─────────────────────────────────────────────────────────────
 
   Future<void> scheduleNextAdhan(PrayerTimes? prayerTimes) async {
     _cancelTimer();
+    _hasBeenScheduled =
+        true; // ✅ FIX: نحدّد أنه تم الاستدعاء مرة واحدة على الأقل
 
     if (prayerTimes == null || !prayerTimes.isValidChronologically()) {
       developer.log(
@@ -48,10 +54,10 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    // 1. In-process Timer (foreground/background)
+    // 1. In-process Timer (sync — يضبط _scheduledTime فوراً)
     _scheduleInProcessTimer(prayerTimes);
 
-    // 2. OS notifications (works even when app is killed)
+    // 2. OS notifications (async — يعمل في الخلفية)
     if (_storageService.isAdhanAutoPlayEnabled()) {
       PrayerTimes? tomorrowPt;
       final tomorrowJson = _storageService.get('cached_prayer_times_tomorrow');
@@ -84,11 +90,10 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  /// English key — used internally by timers and logs.
   DateTime? get scheduledTime => _scheduledTime;
   String? get scheduledPrayerName => _scheduledPrayerName;
+  bool get hasBeenScheduled => _hasBeenScheduled; // ✅ FIX
 
-  /// BUG FIX #2: Arabic name — used by HomeController for UI display.
   String? get scheduledPrayerNameArabic => _scheduledPrayerName != null
       ? _arabicNames[_scheduledPrayerName] ?? _scheduledPrayerName
       : null;
@@ -113,7 +118,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // ── IN-PROCESS TIMER ─────────────────────────────────────────────────────
+  // ── IN-PROCESS TIMER ──────────────────────────────────────────────────────
 
   DateTime? _parseTimeOnDate(DateTime targetDate, String timeStr) {
     try {
@@ -192,7 +197,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
     if (nextPrayerTime == null) {
       developer.log(
-        'Diagnostic Log - [AdhanScheduler]: No upcoming prayers found today or tomorrow.',
+        'Diagnostic Log - [AdhanScheduler]: No upcoming prayers found.',
         name: 'AdhanScheduler',
       );
       return;
@@ -202,7 +207,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     _scheduledPrayerName = nextPrayerName;
     final duration = nextPrayerTime.difference(now);
 
-    // BUG FIX #2: Log shows Arabic name alongside English key
     final arabicForLog = _arabicNames[nextPrayerName] ?? nextPrayerName!;
     developer.log(
       'Diagnostic Log - [AdhanScheduler]:\n'
@@ -217,10 +221,9 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     _prayerTimer = Timer(duration, () => _triggerAdhan(nextPrayerName!));
   }
 
-  // ── ADHAN PLAYBACK ────────────────────────────────────────────────────────
+  // ── ADHAN PLAYBACK ─────────────────────────────────────────────────────────
 
   void _triggerAdhan(String prayerName) {
-    // BUG FIX #2: Resolve Arabic name for display purposes
     final arabicName = _arabicNames[prayerName] ?? prayerName;
 
     developer.log(
@@ -238,9 +241,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    // BUG FIX #1: Show immediate visible notification when adhan fires.
-    // This guarantees a banner even when the app is in the foreground,
-    // since the pre-scheduled OS alarm may be suppressed in that state.
     NotificationService.showImmediateAdhanNotification(arabicName);
 
     final savedFile = _storageService.getSelectedAdhanSound();
@@ -253,7 +253,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         .play(
           adhanUrl,
           AudioMode.adhan,
-          title: arabicName, // BUG FIX #2: Arabic name in media control title
+          title: arabicName,
           subtitle: 'خليك مؤمن',
         )
         .then((_) {
@@ -286,7 +286,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
   void _rescheduleAfterFired() {
     developer.log(
-      'Diagnostic Log - [AdhanScheduler]: Rescheduling after adhan completed or fired.',
+      'Diagnostic Log - [AdhanScheduler]: Rescheduling after adhan completed.',
       name: 'AdhanScheduler',
     );
     final cachedJson = _storageService.get('cached_prayer_times');
@@ -302,7 +302,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  // ── TIMER CLEANUP ─────────────────────────────────────────────────────────
+  // ── TIMER CLEANUP ──────────────────────────────────────────────────────────
 
   void _cancelTimer() {
     _prayerTimer?.cancel();
@@ -315,5 +315,5 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 class _PrayerTimeEntry {
   final String name;
   final DateTime? time;
-  _PrayerTimeEntry(this.name, this.time);
+  const _PrayerTimeEntry(this.name, this.time);
 }

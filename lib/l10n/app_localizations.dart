@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'Islamic Audio Hub'**
+  /// **'KhaleekMomen'**
   String get appTitle;
 
   /// No description provided for @home.
@@ -629,7 +629,7 @@ abstract class AppLocalizations {
   /// No description provided for @islamicAudioHub.
   ///
   /// In en, this message translates to:
-  /// **'Islamic Audio Hub'**
+  /// **'KhaleekMomen'**
   String get islamicAudioHub;
 
   /// No description provided for @noVersesFound.
@@ -695,7 +695,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardWelcomeTitle.
   ///
   /// In en, this message translates to:
-  /// **'Welcome to Islamic Audio Hub'**
+  /// **'Welcome to KhaleekMomen'**
   String get onboardWelcomeTitle;
 
   /// No description provided for @onboardWelcomeSubtitle.
@@ -893,7 +893,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardDoneSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Islamic Audio Hub is ready. May Allah accept your worship and keep you consistent in prayer.'**
+  /// **'KhaleekMomen is ready. May Allah accept your worship and keep you consistent in prayer.'**
   String get onboardDoneSubtitle;
 
   /// No description provided for @onboardDoneNotif.

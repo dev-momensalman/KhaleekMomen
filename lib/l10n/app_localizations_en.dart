@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'Islamic Audio Hub';
+  String get appTitle => 'KhaleekMomen';
 
   @override
   String get home => 'Home';
@@ -288,7 +288,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get unknownAudio => 'Unknown Audio';
 
   @override
-  String get islamicAudioHub => 'Islamic Audio Hub';
+  String get islamicAudioHub => 'KhaleekMomen';
 
   @override
   String get noVersesFound => 'No verses found.';
@@ -322,7 +322,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get skip => 'Skip';
 
   @override
-  String get onboardWelcomeTitle => 'Welcome to Islamic Audio Hub';
+  String get onboardWelcomeTitle => 'Welcome to KhaleekMomen';
 
   @override
   String get onboardWelcomeSubtitle =>
@@ -443,7 +443,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardDoneSubtitle =>
-      'Islamic Audio Hub is ready. May Allah accept your worship and keep you consistent in prayer.';
+      'KhaleekMomen is ready. May Allah accept your worship and keep you consistent in prayer.';
 
   @override
   String get onboardDoneNotif => 'Prayer notifications enabled';

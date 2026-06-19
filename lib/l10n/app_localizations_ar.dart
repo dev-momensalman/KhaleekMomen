@@ -9,7 +9,7 @@ class AppLocalizationsAr extends AppLocalizations {
   AppLocalizationsAr([String locale = 'ar']) : super(locale);
 
   @override
-  String get appTitle => 'موزع الصوتيات الإسلامي';
+  String get appTitle => 'خليك مؤمن';
 
   @override
   String get home => 'الرئيسية';
@@ -288,7 +288,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get unknownAudio => 'صوت غير معروف';
 
   @override
-  String get islamicAudioHub => 'موزع الصوتيات الإسلامي';
+  String get islamicAudioHub => 'خليك مؤمن';
 
   @override
   String get noVersesFound => 'لا توجد آيات.';
@@ -322,11 +322,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get skip => 'تخطي';
 
   @override
-  String get onboardWelcomeTitle => 'أهلاً بك في موزع الصوتيات الإسلامي';
+  String get onboardWelcomeTitle => 'أهلاً بك في خليك مؤمن';
 
   @override
   String get onboardWelcomeSubtitle =>
-      'رفيقك الإسلامي الشامل: قرآن كريم ، أوقات صلاة رياضية دقيقة، إذاعات مباشرة وأذكار يومية — كل هذا في تطبيق واحد رائع.';
+      'رفيقك الإسلامي الشامل: قرآن كريم، أوقات صلاة دقيقة، إذاعات مباشرة وأذكار يومية — كل هذا في تطبيق واحد رائع.';
 
   @override
   String get onboardFeatureQuran =>
@@ -441,7 +441,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get onboardDoneSubtitle =>
-      'موزع الصوتيات الإسلامي جاهز. تقبل الله طاعتك وثبّتك على الصلاة.';
+      'خليك مؤمن جاهز. تقبل الله طاعتك وثبّتك على الصلاة.';
 
   @override
   String get onboardDoneNotif => 'إشعارات الصلاة مفعّلة';

@@ -10,6 +10,10 @@ import 'package:provider/provider.dart';
 import 'package:islamic_audio_hub/controllers/prayer_controller.dart';
 import 'package:islamic_audio_hub/core/services/qibla_service.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PrayerTimesView
+// ─────────────────────────────────────────────────────────────────────────────
+
 class PrayerTimesView extends StatefulWidget {
   const PrayerTimesView({super.key});
 
@@ -23,6 +27,7 @@ class _PrayerTimesViewState extends State<PrayerTimesView> {
   @override
   void initState() {
     super.initState();
+    // Refresh "current prayer" highlight every minute
     _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -51,7 +56,7 @@ class _PrayerTimesViewState extends State<PrayerTimesView> {
     required String en,
   }) => Localizations.localeOf(context).languageCode == 'ar' ? ar : en;
 
-  // ── 12-hour format ────────────────────────────────────────────────────────
+  // ── 12-hour format — respects app locale ──────────────────────────────────
   static String _to12h(String timeStr, String locale) {
     try {
       final clean = timeStr.trim().split(' ').first;
@@ -103,6 +108,7 @@ class _PrayerTimesViewState extends State<PrayerTimesView> {
               _buildOfflineErrorWidget(context, prayerController, l10n)
             else if (times != null) ...[
               const SizedBox(height: 10),
+              // Prayer timeline
               Text(
                 l10n.todaysTimings,
                 style: theme.textTheme.titleMedium?.copyWith(
@@ -112,6 +118,7 @@ class _PrayerTimesViewState extends State<PrayerTimesView> {
               const SizedBox(height: 8),
               _buildPrayerTimeline(context, times, l10n),
               const SizedBox(height: 24),
+              // Qibla
               Text(
                 l10n.qiblaDirection,
                 style: theme.textTheme.titleMedium?.copyWith(
@@ -472,6 +479,8 @@ class _PrayerTimesViewState extends State<PrayerTimesView> {
       );
     }
 
+    // QiblaService uses the correct great-circle bearing formula
+    // and works accurately for any country on Earth.
     final qiblaDirection = QiblaService.calculateQiblaDirection(
       times.latitude!,
       times.longitude!,
@@ -533,10 +542,31 @@ class _PrayerTimesViewState extends State<PrayerTimesView> {
   }
 }
 
-// ─── Live Qibla Compass ───────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _LiveQiblaCompass
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// How it works:
+//   • accelerometerEventStream  → gravity vector (tilt data)
+//   • magnetometerEventStream   → magnetic field vector
+//   • NXP AN4248 algorithm      → tilt-compensated magnetic heading
+//
+// Needle direction:
+//   needleAngle = qiblaDirection - deviceHeading
+//   When needleAngle ≈ 0°  →  the needle points UP  →  user faces Mecca ✓
+//
+// Wrap-around fix:
+//   We accumulate heading using shortest-path deltas (−180° to +180°)
+//   so AnimatedRotation never takes the long way around (the 330° spin bug).
+//
+// Alignment detection:
+//   When |needleAngle| < _alignThresholdDeg (5°) we show a green "aligned"
+//   state so the user knows exactly when to stop rotating.
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _LiveQiblaCompass extends StatefulWidget {
-  /// True geographic bearing to Mecca (0–360° clockwise from north).
+  /// True geographic bearing to Mecca in degrees (0–360° CW from true north).
+  /// Calculated by QiblaService using the correct great-circle formula.
   final double qiblaDirection;
   final ThemeData theme;
 
@@ -546,40 +576,66 @@ class _LiveQiblaCompass extends StatefulWidget {
   State<_LiveQiblaCompass> createState() => _LiveQiblaCompassState();
 }
 
-class _LiveQiblaCompassState extends State<_LiveQiblaCompass> {
-  // Latest sensor readings
-  AccelerometerEvent? _accel;
-  MagnetometerEvent? _mag;
-
-  // Low-pass filtered values for smooth rendering
-  final List<double> _accelF = [0, 0, 9.8];
-  final List<double> _magF = [0, 0, 0];
-
-  // Computed heading (magnetic north, degrees CW)
-  double _heading = 0.0;
-  bool _hasReading = false;
-
-  // Calibration quality (0–1)
-  double _calibration = 1.0;
-
+class _LiveQiblaCompassState extends State<_LiveQiblaCompass>
+    with SingleTickerProviderStateMixin {
+  // ── Sensor subscriptions ──────────────────────────────────────────────────
   StreamSubscription<AccelerometerEvent>? _accelSub;
   StreamSubscription<MagnetometerEvent>? _magSub;
 
-  // Low-pass filter coefficient (0 = no update, 1 = raw)
-  // Lower = smoother but more lag. 0.1 is a good balance.
-  static const double _alpha = 0.1;
+  // ── Low-pass filtered sensor values ──────────────────────────────────────
+  // Using typed List<double> (not dynamic) to avoid runtime cast errors.
+  final List<double> _accelF = [0.0, 0.0, 9.81];
+  final List<double> _magF = [0.0, 0.0, 0.0];
+
+  // Low-pass filter coefficient.
+  // 0.15 at ~5 Hz (normalInterval) gives a good balance of smoothness vs lag.
+  static const double _alpha = 0.15;
+
+  // ── Heading state ─────────────────────────────────────────────────────────
+  // We use ACCUMULATED turns to prevent AnimatedRotation wrap-around bugs.
+  // Instead of passing angle/360 directly, we add the shortest-path delta
+  // each update, so the value monotonically increases/decreases.
+  double _needleTurnsAccum = 0.0; // accumulated needle turns
+  double _dialTurnsAccum = 0.0; // accumulated dial turns
+  double _prevNeedleAngle = 0.0; // last needle angle in degrees (0–360)
+  double _prevDialAngle = 0.0; // last dial angle in degrees (0–360)
+
+  bool _hasReading = false;
+  double _calibration = 1.0; // 0.0–1.0, based on magnetic field magnitude
+
+  // ── Alignment detection ───────────────────────────────────────────────────
+  // User is "aligned" when the needle points up (≈ 0°), meaning they face Mecca.
+  static const double _alignThresholdDeg = 5.0;
+  bool _isAligned = false;
+
+  // ── Alignment pulse animation ─────────────────────────────────────────────
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnim;
 
   @override
   void initState() {
     super.initState();
+
+    // Pulse animation plays when aligned
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _pulseAnim = Tween<double>(begin: 1.0, end: 1.12).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _startListening();
+  }
+
+  void _startListening() {
     _accelSub =
         accelerometerEventStream(
-          samplingPeriod: SensorInterval.normalInterval,
+          samplingPeriod: SensorInterval.normalInterval, // ~200 ms
         ).listen((e) {
-          _accel = e;
-          _accelF[0] = _accelF[0] + _alpha * (e.x - _accelF[0]);
-          _accelF[1] = _accelF[1] + _alpha * (e.y - _accelF[1]);
-          _accelF[2] = _accelF[2] + _alpha * (e.z - _accelF[2]);
+          _accelF[0] += _alpha * (e.x - _accelF[0]);
+          _accelF[1] += _alpha * (e.y - _accelF[1]);
+          _accelF[2] += _alpha * (e.z - _accelF[2]);
           _update();
         });
 
@@ -587,17 +643,17 @@ class _LiveQiblaCompassState extends State<_LiveQiblaCompass> {
         magnetometerEventStream(
           samplingPeriod: SensorInterval.normalInterval,
         ).listen((e) {
-          _mag = e;
-          _magF[0] = _magF[0] + _alpha * (e.x - _magF[0]);
-          _magF[1] = _magF[1] + _alpha * (e.y - _magF[1]);
-          _magF[2] = _magF[2] + _alpha * (e.z - _magF[2]);
+          _magF[0] += _alpha * (e.x - _magF[0]);
+          _magF[1] += _alpha * (e.y - _magF[1]);
+          _magF[2] += _alpha * (e.z - _magF[2]);
           _update();
         });
   }
 
+  // ── Core update ───────────────────────────────────────────────────────────
+
   void _update() {
-    if (_accel == null || _mag == null) return;
-    final h = _computeHeading(
+    final heading = _computeHeading(
       _accelF[0],
       _accelF[1],
       _accelF[2],
@@ -605,86 +661,115 @@ class _LiveQiblaCompassState extends State<_LiveQiblaCompass> {
       _magF[1],
       _magF[2],
     );
-    if (h == null) return;
-    if (!mounted) return;
+    if (heading == null || !mounted) return;
+
+    // ── Wrap-around fix ───────────────────────────────────────────────────
+    // needle angle = how far to rotate the needle from "up" to point to Mecca
+    final needleAngle = (widget.qiblaDirection - heading) % 360.0;
+    // dial   angle = rotate dial opposite to device so N stays on real north
+    final dialAngle = (-heading) % 360.0;
+
+    // Shortest-path delta: normalise to (−180, +180]
+    final needleDelta = _shortestDelta(_prevNeedleAngle, needleAngle);
+    final dialDelta = _shortestDelta(_prevDialAngle, dialAngle);
+
+    _needleTurnsAccum += needleDelta / 360.0;
+    _dialTurnsAccum += dialDelta / 360.0;
+    _prevNeedleAngle = needleAngle;
+    _prevDialAngle = dialAngle;
+
+    // ── Alignment detection ───────────────────────────────────────────────
+    // needleAngle near 0° means needle points up = user faces Mecca
+    final absNeedle = needleAngle <= 180 ? needleAngle : 360 - needleAngle;
+    final aligned = absNeedle < _alignThresholdDeg;
+
+    // Manage pulse animation
+    if (aligned && !_isAligned) {
+      _pulseController.repeat(reverse: true);
+    } else if (!aligned && _isAligned) {
+      _pulseController.stop();
+      _pulseController.reset();
+    }
+
+    // ── Calibration heuristic ─────────────────────────────────────────────
+    // Earth's magnetic field is ~25–65 µT.
+    // Outside this range indicates ferromagnetic interference.
+    final norm = sqrt(
+      _magF[0] * _magF[0] + _magF[1] * _magF[1] + _magF[2] * _magF[2],
+    );
+    final calib = (norm < 20 || norm > 80)
+        ? 0.4
+        : (norm < 25 || norm > 65)
+        ? 0.7
+        : 1.0;
+
     setState(() {
-      _heading = h;
       _hasReading = true;
-      // Calibration heuristic: check magnetic field magnitude
-      // Earth's field is ~25–65 µT. Too low or too high = interference.
-      final norm = sqrt(
-        _magF[0] * _magF[0] + _magF[1] * _magF[1] + _magF[2] * _magF[2],
-      );
-      if (norm < 20 || norm > 80) {
-        _calibration = 0.4; // low — near interference
-      } else if (norm < 25 || norm > 65) {
-        _calibration = 0.7; // medium
-      } else {
-        _calibration = 1.0; // good
-      }
+      _isAligned = aligned;
+      _calibration = calib;
     });
+  }
+
+  /// Returns the shortest angular delta from [from] to [to] in (−180, +180].
+  /// Both inputs are in degrees [0, 360).
+  static double _shortestDelta(double from, double to) {
+    double d = (to - from) % 360.0;
+    if (d > 180.0) d -= 360.0;
+    if (d < -180.0) d += 360.0;
+    return d;
   }
 
   @override
   void dispose() {
     _accelSub?.cancel();
     _magSub?.cancel();
+    _pulseController.dispose();
     super.dispose();
   }
 
-  // ── Tilt-compensated heading (NXP AN4248 algorithm) ───────────────────────
+  // ── Tilt-compensated heading — NXP AN4248 ─────────────────────────────────
   //
-  // Input : raw accelerometer (gravity, m/s²) + magnetometer (µT)
-  // Output: magnetic north heading in degrees (0–360 CW) — or null if invalid
+  // Returns magnetic north heading in degrees (0–360 CW), or null if sensors
+  // are in free-fall / initialising (normA < 0.5 m/s²).
   //
-  // Works in any device orientation (portrait, landscape, tilted).
-  // Magnetic declination is NOT applied here; for most Muslim-majority
-  // countries the declination is ≤ 5° which is within compass accuracy.
-  // Users can visually verify by aligning with known landmarks.
+  // Works correctly for any device tilt / country / geographic location.
+  // The compass measures MAGNETIC north. The Qibla bearing from QiblaService
+  // is relative to TRUE (geographic) north. The difference is "magnetic
+  // declination", which varies from −30° (W Alaska) to +30° (E Siberia).
+  // For all Arab countries it is < 5°, well within practical Qibla accuracy.
+  //
+  // Reference: NXP Application Note AN4248 Rev 3.
   static double? _computeHeading(
     double ax,
     double ay,
-    double az, // accelerometer (gravity)
+    double az, // accelerometer (m/s²)
     double mx,
     double my,
-    double mz, // magnetometer
+    double mz, // magnetometer (µT)
   ) {
     final normA = sqrt(ax * ax + ay * ay + az * az);
-    if (normA < 0.5) return null; // free-fall or bad reading
+    if (normA < 0.5) return null; // free-fall or uninitialised
 
-    // Roll (φ) and pitch (θ) from accelerometer
+    // Roll φ and pitch θ from accelerometer
     final phi = atan2(ay, az);
     final theta = atan2(-ax, sqrt(ay * ay + az * az));
 
-    // Tilt-compensated magnetic field components in horizontal plane
     final cosPhi = cos(phi);
     final sinPhi = sin(phi);
     final cosTheta = cos(theta);
     final sinTheta = sin(theta);
 
-    // Rotate magnetometer reading into horizontal plane
+    // Tilt-compensated magnetic field in the horizontal plane
     final bfx = mx * cosTheta + my * sinPhi * sinTheta + mz * cosPhi * sinTheta;
-
     final bfy = my * cosPhi - mz * sinPhi;
 
-    // Heading (azimuth) — CW from magnetic north
-    var heading = atan2(-bfy, bfx) * 180.0 / pi;
-    if (heading < 0) heading += 360.0;
-    if (heading > 360) heading -= 360.0;
-    return heading;
+    // Azimuth — CW from magnetic north
+    var h = atan2(-bfy, bfx) * 180.0 / pi;
+    return (h + 360.0) % 360.0;
   }
 
-  // ── Needle and dial turns ─────────────────────────────────────────────────
-  //
-  // needleTurns: needle always points to Mecca regardless of device orientation
-  //   = (qiblaDirection - deviceHeading) / 360
-  //
-  // dialTurns: dial rotates opposite to device so "N" always faces real north
-  //   = -deviceHeading / 360
-  double get _needleTurns => (widget.qiblaDirection - _heading) / 360.0;
-  double get _dialTurns => -_heading / 360.0;
+  // ── Calibration helpers ───────────────────────────────────────────────────
 
-  // ── Calibration colour and label ──────────────────────────────────────────
   Color _calibColor() {
     if (_calibration >= 0.9) return Colors.green;
     if (_calibration >= 0.6) return Colors.orange;
@@ -699,40 +784,42 @@ class _LiveQiblaCompassState extends State<_LiveQiblaCompass> {
       return isAr ? 'دقة متوسطة' : 'Medium accuracy';
     } else {
       return isAr
-          ? 'تداخل مغناطيسي — ابتعد عن الأجهزة المعدنية'
-          : 'Interference — move away from metal/electronics';
+          ? 'تداخل — ابتعد عن الأجهزة المعدنية'
+          : 'Interference — move from metal/electronics';
     }
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
 
-    // Waiting for first reading
+    // First-time initialisation — no sensor reading yet
     if (!_hasReading) {
       return Column(
         children: [
           SizedBox(
-            width: 200,
-            height: 200,
+            width: 210,
+            height: 210,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 const SizedBox(
-                  width: 160,
-                  height: 160,
+                  width: 170,
+                  height: 170,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
                 Icon(
                   Icons.explore_rounded,
-                  size: 44,
+                  size: 48,
                   color: theme.colorScheme.outline,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             isAr ? 'جاري تهيئة البوصلة...' : 'Initializing compass...',
             style: theme.textTheme.bodySmall?.copyWith(
@@ -745,107 +832,206 @@ class _LiveQiblaCompassState extends State<_LiveQiblaCompass> {
 
     return Column(
       children: [
-        // ── Compass ─────────────────────────────────────────────────────────
-        SizedBox(
-          width: 200,
-          height: 200,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // ① Cardinal ring — rotates so N faces real geographic north
-              AnimatedRotation(
-                turns: _dialTurns,
-                duration: const Duration(milliseconds: 80),
-                curve: Curves.linear,
-                child: _DialRing(theme: theme),
-              ),
-
-              // ② Inner glow
-              Container(
-                width: 128,
-                height: 128,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: theme.colorScheme.primary.withValues(alpha: 0.04),
-                ),
-              ),
-
-              // ③ Qibla needle — always points to Mecca
-              AnimatedRotation(
-                turns: _needleTurns,
-                duration: const Duration(milliseconds: 80),
-                curve: Curves.linear,
-                child: _QiblaNeedle(theme: theme),
-              ),
-
-              // ④ Kaaba icon at centre
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: theme.colorScheme.secondaryContainer,
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.colorScheme.shadow.withValues(alpha: 0.15),
-                      blurRadius: 6,
+        // ── Compass dial ─────────────────────────────────────────────────
+        ScaleTransition(
+          scale: _isAligned ? _pulseAnim : const AlwaysStoppedAnimation(1.0),
+          child: SizedBox(
+            width: 210,
+            height: 210,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // ── Alignment glow ring (shown when user faces Mecca) ────
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 400),
+                  opacity: _isAligned ? 1.0 : 0.0,
+                  child: Container(
+                    width: 210,
+                    height: 210,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.green.withValues(alpha: 0.35),
+                          blurRadius: 24,
+                          spreadRadius: 4,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-                child: Icon(
-                  Icons.mosque_rounded,
-                  color: theme.colorScheme.secondary,
-                  size: 22,
+
+                // ① Cardinal ring — rotates so N faces real geographic north
+                AnimatedRotation(
+                  turns: _dialTurns,
+                  duration: const Duration(milliseconds: 100),
+                  curve: Curves.linear,
+                  child: _DialRing(theme: theme, isAligned: _isAligned),
                 ),
-              ),
-            ],
+
+                // ② Inner glow circle
+                Container(
+                  width: 135,
+                  height: 135,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color:
+                        (_isAligned ? Colors.green : theme.colorScheme.primary)
+                            .withValues(alpha: 0.05),
+                  ),
+                ),
+
+                // ③ Qibla needle — always points to Mecca
+                AnimatedRotation(
+                  turns: _needleTurns,
+                  duration: const Duration(milliseconds: 100),
+                  curve: Curves.linear,
+                  child: _QiblaNeedle(theme: theme, isAligned: _isAligned),
+                ),
+
+                // ④ Kaaba icon at centre
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _isAligned
+                        ? Colors.green.shade100
+                        : theme.colorScheme.secondaryContainer,
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.colorScheme.shadow.withValues(alpha: 0.15),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.mosque_rounded,
+                    color: _isAligned
+                        ? Colors.green.shade700
+                        : theme.colorScheme.secondary,
+                    size: 22,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
 
         const SizedBox(height: 14),
 
-        // ── Calibration badge ────────────────────────────────────────────────
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _calibColor(),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                _calibLabel(context),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+        // ── Aligned label or calibration badge ───────────────────────────
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          child: _isAligned
+              ? _AlignedBadge(isAr: isAr, key: const ValueKey('aligned'))
+              : _CalibBadge(
+                  color: _calibColor(),
+                  label: _calibLabel(context),
+                  key: const ValueKey('calib'),
                 ),
-              ),
+        ),
+      ],
+    );
+  }
+
+  // Expose accumulated turns as getters (not inline expressions)
+  // so we never accidentally pass a raw modulo value to AnimatedRotation.
+  double get _needleTurns => _needleTurnsAccum;
+  double get _dialTurns => _dialTurnsAccum;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "You're aligned" badge
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AlignedBadge extends StatelessWidget {
+  final bool isAr;
+  const _AlignedBadge({required this.isAr, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            isAr ? 'أنت تواجه القبلة الآن' : 'You are facing the Qibla',
+            style: TextStyle(
+              color: Colors.green.shade700,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calibration badge
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CalibBadge extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _CalibBadge({required this.color, required this.label, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-// ─── Dial ring ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _DialRing — cardinal directions ring
+// Rotates so N always faces real geographic north on screen.
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _DialRing extends StatelessWidget {
   final ThemeData theme;
-  const _DialRing({required this.theme});
+  final bool isAligned;
+  const _DialRing({required this.theme, required this.isAligned});
 
   @override
   Widget build(BuildContext context) {
+    final ringColor = isAligned
+        ? Colors.green.withValues(alpha: 0.7)
+        : theme.colorScheme.outlineVariant;
+
     return Container(
-      width: 200,
-      height: 200,
+      width: 210,
+      height: 210,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: theme.colorScheme.outlineVariant, width: 1.5),
+        border: Border.all(color: ringColor, width: 1.5),
       ),
       child: Stack(
         alignment: Alignment.center,
@@ -868,7 +1054,7 @@ class _DialRing extends StatelessWidget {
             );
           }),
 
-          // N — red
+          // N — always red (real north)
           const Align(
             alignment: Alignment.topCenter,
             child: Padding(
@@ -883,7 +1069,6 @@ class _DialRing extends StatelessWidget {
               ),
             ),
           ),
-          // S
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
@@ -898,7 +1083,6 @@ class _DialRing extends StatelessWidget {
               ),
             ),
           ),
-          // W
           Align(
             alignment: Alignment.centerLeft,
             child: Padding(
@@ -913,7 +1097,6 @@ class _DialRing extends StatelessWidget {
               ),
             ),
           ),
-          // E
           Align(
             alignment: Alignment.centerRight,
             child: Padding(
@@ -934,24 +1117,32 @@ class _DialRing extends StatelessWidget {
   }
 }
 
-// ─── Qibla needle ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _QiblaNeedle — always points toward Mecca
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _QiblaNeedle extends StatelessWidget {
   final ThemeData theme;
-  const _QiblaNeedle({required this.theme});
+  final bool isAligned;
+  const _QiblaNeedle({required this.theme, required this.isAligned});
 
   @override
   Widget build(BuildContext context) {
+    final headColor = isAligned ? Colors.green : theme.colorScheme.primary;
+    final tailColor = isAligned
+        ? Colors.green.withValues(alpha: 0.3)
+        : theme.colorScheme.outline.withValues(alpha: 0.35);
+
     return SizedBox(
-      width: 200,
-      height: 200,
+      width: 210,
+      height: 210,
       child: Center(
         child: CustomPaint(
-          size: const Size(18, 104),
+          size: const Size(18, 110),
           painter: _NeedlePainter(
-            headColor: theme.colorScheme.primary,
-            tailColor: theme.colorScheme.outline.withValues(alpha: 0.35),
-            dotColor: theme.colorScheme.primary,
+            headColor: headColor,
+            tailColor: tailColor,
+            dotColor: headColor,
           ),
         ),
       ),
@@ -959,7 +1150,9 @@ class _QiblaNeedle extends StatelessWidget {
   }
 }
 
-// ─── Needle painter ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _NeedlePainter
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _NeedlePainter extends CustomPainter {
   final Color headColor;
@@ -975,25 +1168,27 @@ class _NeedlePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
-    final pivot = size.height * 0.60; // pivot point (centre of compass)
+    final pivot = size.height * 0.60; // centre of compass
 
-    // ↑ Head — points to Mecca
-    final headPaint = Paint()..color = headColor;
-    final headPath = Path()
-      ..moveTo(cx, 0)
-      ..lineTo(cx + cx, pivot)
-      ..lineTo(cx - cx, pivot)
-      ..close();
-    canvas.drawPath(headPath, headPaint);
+    // Head (↑) — points to Mecca
+    canvas.drawPath(
+      Path()
+        ..moveTo(cx, 0)
+        ..lineTo(cx + cx, pivot)
+        ..lineTo(cx - cx, pivot)
+        ..close(),
+      Paint()..color = headColor,
+    );
 
-    // ↓ Tail
-    final tailPaint = Paint()..color = tailColor;
-    final tailPath = Path()
-      ..moveTo(cx, size.height)
-      ..lineTo(cx + cx, pivot)
-      ..lineTo(cx - cx, pivot)
-      ..close();
-    canvas.drawPath(tailPath, tailPaint);
+    // Tail (↓)
+    canvas.drawPath(
+      Path()
+        ..moveTo(cx, size.height)
+        ..lineTo(cx + cx, pivot)
+        ..lineTo(cx - cx, pivot)
+        ..close(),
+      Paint()..color = tailColor,
+    );
 
     // Centre pivot dot
     canvas.drawCircle(Offset(cx, pivot), 5, Paint()..color = dotColor);
@@ -1006,12 +1201,13 @@ class _NeedlePainter extends CustomPainter {
       old.dotColor != dotColor;
 }
 
-// ─── Prayer item model ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _PrayerItem model
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _PrayerItem {
   final String name;
   final String time;
   final IconData icon;
-
   const _PrayerItem(this.name, this.time, this.icon);
 }
