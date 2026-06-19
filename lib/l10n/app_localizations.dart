@@ -287,7 +287,7 @@ abstract class AppLocalizations {
   /// No description provided for @adhanAutoplaySubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Play the Adhan notification audio automatically at prayer times.'**
+  /// **'Play the Adhan automatically at each prayer time.'**
   String get adhanAutoplaySubtitle;
 
   /// No description provided for @personalization.
@@ -329,13 +329,13 @@ abstract class AppLocalizations {
   /// No description provided for @dataSafetySubtitle.
   ///
   /// In en, this message translates to:
-  /// **'All calculation coordinates and storage parameters stay 100% offline on your device.'**
+  /// **'All data stays 100% offline on your device. Never shared.'**
   String get dataSafetySubtitle;
 
   /// No description provided for @privacySnackbar.
   ///
   /// In en, this message translates to:
-  /// **'Privacy Guard: Coordinates are processed locally on your device.'**
+  /// **'Privacy Guard: All data is processed locally on your device.'**
   String get privacySnackbar;
 
   /// No description provided for @nextPrayer.
@@ -347,7 +347,7 @@ abstract class AppLocalizations {
   /// No description provided for @liveDeviceScheduler.
   ///
   /// In en, this message translates to:
-  /// **'Live Device Time Scheduler'**
+  /// **'Device Time'**
   String get liveDeviceScheduler;
 
   /// No description provided for @recentlyPlayed.
@@ -359,7 +359,7 @@ abstract class AppLocalizations {
   /// No description provided for @exploreHub.
   ///
   /// In en, this message translates to:
-  /// **'Explore Hub'**
+  /// **'Explore'**
   String get exploreHub;
 
   /// No description provided for @islamicRadio.
@@ -467,7 +467,7 @@ abstract class AppLocalizations {
   /// No description provided for @relativeToBearing.
   ///
   /// In en, this message translates to:
-  /// **'Calculated relative to North bearing'**
+  /// **'Calculated relative to North'**
   String get relativeToBearing;
 
   /// No description provided for @qiblaDegrees.
@@ -485,25 +485,25 @@ abstract class AppLocalizations {
   /// No description provided for @updateCoordinates.
   ///
   /// In en, this message translates to:
-  /// **'Update coordinates'**
+  /// **'Update Location'**
   String get updateCoordinates;
 
   /// No description provided for @noConnectionOffline.
   ///
   /// In en, this message translates to:
-  /// **'No Connection / Offline'**
+  /// **'No Internet Connection'**
   String get noConnectionOffline;
 
   /// No description provided for @cachedOfflineData.
   ///
   /// In en, this message translates to:
-  /// **'Cached Offline Data'**
+  /// **'Cached Data'**
   String get cachedOfflineData;
 
   /// No description provided for @liveApiSynced.
   ///
   /// In en, this message translates to:
-  /// **'Live API Synchronized'**
+  /// **'Live Synced'**
   String get liveApiSynced;
 
   /// No description provided for @prayerTimesUnavailable.
@@ -515,19 +515,19 @@ abstract class AppLocalizations {
   /// No description provided for @prayerTimesDefaultError.
   ///
   /// In en, this message translates to:
-  /// **'Please enable location permissions and connect to the internet to calculate prayer schedules.'**
+  /// **'Please enable location permissions and connect to the internet to calculate prayer times.'**
   String get prayerTimesDefaultError;
 
   /// No description provided for @retryFetching.
   ///
   /// In en, this message translates to:
-  /// **'Retry Fetching'**
+  /// **'Retry'**
   String get retryFetching;
 
   /// No description provided for @coordsUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'Coordinates unavailable. Cannot calculate Qibla direction.'**
+  /// **'Location unavailable. Cannot calculate Qibla direction.'**
   String get coordsUnavailable;
 
   /// No description provided for @fajr.
@@ -599,7 +599,7 @@ abstract class AppLocalizations {
   /// No description provided for @noSurahFavoritesMsg.
   ///
   /// In en, this message translates to:
-  /// **'Select a reciter, browse surahs, and add your favorite chapters here.'**
+  /// **'Select a reciter, browse surahs, and add your favorites here.'**
   String get noSurahFavoritesMsg;
 
   /// No description provided for @searchRadioStations.
@@ -677,7 +677,7 @@ abstract class AppLocalizations {
   /// No description provided for @permissionDeniedBody.
   ///
   /// In en, this message translates to:
-  /// **'This permission was permanently denied. Please enable it from app settings to use this feature.'**
+  /// **'This permission was denied. Please enable it from app settings.'**
   String get permissionDeniedBody;
 
   /// No description provided for @openSettings.
@@ -701,43 +701,43 @@ abstract class AppLocalizations {
   /// No description provided for @onboardWelcomeSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Your complete Islamic companion for Quran, prayer times, live radio, and daily Azkar — all in one beautiful app.'**
+  /// **'Your companion for Quran, prayer times, and daily Azkar — all in one app.'**
   String get onboardWelcomeSubtitle;
 
   /// No description provided for @onboardFeatureQuran.
   ///
   /// In en, this message translates to:
-  /// **'Listen to the Holy Quran with world-class reciters'**
+  /// **'Listen to the Quran with top reciters'**
   String get onboardFeatureQuran;
 
   /// No description provided for @onboardFeaturePrayer.
   ///
   /// In en, this message translates to:
-  /// **'Accurate prayer times with automatic Adhan'**
+  /// **'Accurate prayer times with auto Adhan'**
   String get onboardFeaturePrayer;
 
   /// No description provided for @onboardFeatureRadio.
   ///
   /// In en, this message translates to:
-  /// **'Live Islamic radio stations from around the world'**
+  /// **'Live Islamic radio stations'**
   String get onboardFeatureRadio;
 
   /// No description provided for @onboardFeatureAzkar.
   ///
   /// In en, this message translates to:
-  /// **'Morning, evening and sleep Azkar reminders'**
+  /// **'Morning, evening & sleep Azkar'**
   String get onboardFeatureAzkar;
 
   /// No description provided for @onboardLocationTitle.
   ///
   /// In en, this message translates to:
-  /// **'Location Permission'**
+  /// **'Location for Prayer Times'**
   String get onboardLocationTitle;
 
   /// No description provided for @onboardLocationSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'We need your location to calculate precise prayer times and Qibla direction for your city.'**
+  /// **'We use your location only to calculate prayer times and show the Qibla direction. Never shared.'**
   String get onboardLocationSubtitle;
 
   /// No description provided for @onboardWhyNeeded.
@@ -749,19 +749,19 @@ abstract class AppLocalizations {
   /// No description provided for @onboardLocationBullet1.
   ///
   /// In en, this message translates to:
-  /// **'Calculate the 5 daily prayer times based on your exact coordinates'**
+  /// **'Calculate accurate prayer times for your city'**
   String get onboardLocationBullet1;
 
   /// No description provided for @onboardLocationBullet2.
   ///
   /// In en, this message translates to:
-  /// **'Show the precise Qibla compass direction toward the Kaaba'**
+  /// **'Show the Qibla direction toward the Kaaba'**
   String get onboardLocationBullet2;
 
   /// No description provided for @onboardLocationBullet3.
   ///
   /// In en, this message translates to:
-  /// **'Your location is processed 100% locally — never uploaded to any server'**
+  /// **'Your location is processed locally — never uploaded'**
   String get onboardLocationBullet3;
 
   /// No description provided for @onboardGrantLocation.
@@ -769,6 +769,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Allow Location Access'**
   String get onboardGrantLocation;
+
+  /// No description provided for @onboardAdhanTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Adhan Permissions'**
+  String get onboardAdhanTitle;
+
+  /// No description provided for @onboardAdhanSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Grant these so the Adhan always reaches you on time.'**
+  String get onboardAdhanSubtitle;
+
+  /// No description provided for @onboardNotifLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Prayer Notifications'**
+  String get onboardNotifLabel;
 
   /// No description provided for @onboardNotifTitle.
   ///
@@ -779,25 +797,25 @@ abstract class AppLocalizations {
   /// No description provided for @onboardNotifSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Allow notifications so the app can alert you when each prayer time arrives, even when the screen is off.'**
+  /// **'Get notified at each prayer time.'**
   String get onboardNotifSubtitle;
 
   /// No description provided for @onboardNotifBullet1.
   ///
   /// In en, this message translates to:
-  /// **'Receive a notification at each of the 5 daily prayer times'**
+  /// **'Receive a notification at each prayer time'**
   String get onboardNotifBullet1;
 
   /// No description provided for @onboardNotifBullet2.
   ///
   /// In en, this message translates to:
-  /// **'Notifications play your selected Adhan sound automatically'**
+  /// **'Plays your selected Adhan automatically'**
   String get onboardNotifBullet2;
 
   /// No description provided for @onboardNotifBullet3.
   ///
   /// In en, this message translates to:
-  /// **'You can disable individual prayers anytime from Settings'**
+  /// **'Disable individual prayers anytime from Settings'**
   String get onboardNotifBullet3;
 
   /// No description provided for @onboardGrantNotif.
@@ -806,82 +824,94 @@ abstract class AppLocalizations {
   /// **'Allow Notifications'**
   String get onboardGrantNotif;
 
+  /// No description provided for @onboardAlarmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Precise Adhan Timing'**
+  String get onboardAlarmLabel;
+
   /// No description provided for @onboardAlarmTitle.
   ///
   /// In en, this message translates to:
-  /// **'Exact Alarm Permission'**
+  /// **'Precise Adhan Timing'**
   String get onboardAlarmTitle;
 
   /// No description provided for @onboardAlarmSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Android requires special permission to schedule alarms at exact times — essential for prayers that cannot be late.'**
+  /// **'Ensures the Adhan fires at the exact prayer time.'**
   String get onboardAlarmSubtitle;
 
   /// No description provided for @onboardAlarmBullet1.
   ///
   /// In en, this message translates to:
-  /// **'Ensures Adhan fires at the precise prayer time, not minutes late'**
+  /// **'Adhan fires at the exact minute, not late'**
   String get onboardAlarmBullet1;
 
   /// No description provided for @onboardAlarmBullet2.
   ///
   /// In en, this message translates to:
-  /// **'Required by Android for exact-time scheduling (API 31+)'**
+  /// **'Required for reliable prayer time delivery'**
   String get onboardAlarmBullet2;
 
   /// No description provided for @onboardAlarmBullet3.
   ///
   /// In en, this message translates to:
-  /// **'Without this, prayer notifications may be delayed by the OS'**
+  /// **'Without this, notifications may be delayed'**
   String get onboardAlarmBullet3;
 
   /// No description provided for @onboardGrantAlarm.
   ///
   /// In en, this message translates to:
-  /// **'Allow Exact Alarms'**
+  /// **'Allow Precise Alarms'**
   String get onboardGrantAlarm;
+
+  /// No description provided for @onboardBatteryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Background Activity'**
+  String get onboardBatteryLabel;
 
   /// No description provided for @onboardBatteryTitle.
   ///
   /// In en, this message translates to:
-  /// **'Battery Optimization'**
+  /// **'Background Activity'**
   String get onboardBatteryTitle;
 
   /// No description provided for @onboardBatterySubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Disable battery optimization for this app so the Adhan continues to work reliably when your phone is idle or the screen is off.'**
+  /// **'Keep the Adhan working even when the screen is off.'**
   String get onboardBatterySubtitle;
 
   /// No description provided for @onboardBatteryBullet1.
   ///
   /// In en, this message translates to:
-  /// **'Prevents Android from killing the Adhan scheduler in Doze mode'**
+  /// **'Ensures the Adhan plays even overnight'**
   String get onboardBatteryBullet1;
 
   /// No description provided for @onboardBatteryBullet2.
   ///
   /// In en, this message translates to:
-  /// **'Ensures prayer alarms fire even overnight or during long screen-off periods'**
+  /// **'Minimal battery impact'**
   String get onboardBatteryBullet2;
 
   /// No description provided for @onboardBatteryBullet3.
   ///
   /// In en, this message translates to:
-  /// **'The app uses minimal battery — this only removes the delay restriction'**
+  /// **'Only removes the background delay restriction'**
   String get onboardBatteryBullet3;
 
   /// No description provided for @onboardGrantBattery.
   ///
   /// In en, this message translates to:
-  /// **'Disable Battery Restriction'**
+  /// **'Disable Battery Restrictions'**
   String get onboardGrantBattery;
 
   /// No description provided for @onboardPermissionGranted.
   ///
   /// In en, this message translates to:
-  /// **'Permission granted'**
+  /// **'Enabled ✓'**
   String get onboardPermissionGranted;
 
   /// No description provided for @onboardDoneTitle.
@@ -899,19 +929,19 @@ abstract class AppLocalizations {
   /// No description provided for @onboardDoneNotif.
   ///
   /// In en, this message translates to:
-  /// **'Prayer notifications enabled'**
+  /// **'Prayer Notifications'**
   String get onboardDoneNotif;
 
   /// No description provided for @onboardDoneAlarm.
   ///
   /// In en, this message translates to:
-  /// **'Exact Adhan alarms configured'**
+  /// **'Adhan Alarms'**
   String get onboardDoneAlarm;
 
   /// No description provided for @onboardDoneBattery.
   ///
   /// In en, this message translates to:
-  /// **'Reliable background delivery'**
+  /// **'Background Adhan'**
   String get onboardDoneBattery;
 
   /// No description provided for @onboardNext.
@@ -923,7 +953,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardFinish.
   ///
   /// In en, this message translates to:
-  /// **'Start Using App'**
+  /// **'Start the App'**
   String get onboardFinish;
 
   /// No description provided for @tafsirTitle.
@@ -953,19 +983,19 @@ abstract class AppLocalizations {
   /// No description provided for @copyAyah.
   ///
   /// In en, this message translates to:
-  /// **'Copy verse'**
+  /// **'Copy Verse'**
   String get copyAyah;
 
   /// No description provided for @ayahCopied.
   ///
   /// In en, this message translates to:
-  /// **'Verse copied to clipboard'**
+  /// **'Verse copied'**
   String get ayahCopied;
 
   /// No description provided for @jumpToAyah.
   ///
   /// In en, this message translates to:
-  /// **'Jump to verse'**
+  /// **'Jump to Verse'**
   String get jumpToAyah;
 
   /// No description provided for @ayahNumberHint.

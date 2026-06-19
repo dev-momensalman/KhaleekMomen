@@ -63,14 +63,12 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _bootstrap() async {
-    // ── 1. Hive storage ───────────────────────────────────────────────────
     try {
       await StorageService.init();
     } catch (e) {
       debugPrint('[Boot] Storage init failed: $e');
     }
 
-    // ── 2. OS Prayer Notifications ────────────────────────────────────────
     try {
       await NotificationService.init();
       await NotificationService.checkAndRequestBatteryOptimization();
@@ -78,21 +76,18 @@ class _MyAppState extends State<MyApp> {
       debugPrint('[Boot] Notification service init failed: $e');
     }
 
-    // ── 3. Background WorkManager ─────────────────────────────────────────
     try {
       await registerAdhanWorker();
     } catch (e) {
       debugPrint('[Boot] WorkManager registration failed: $e');
     }
 
-    // ── 4. Background audio engine ────────────────────────────────────────
     try {
       await AudioServiceWrapper.init();
     } catch (e) {
       debugPrint('[Boot] Audio init failed: $e');
     }
 
-    // ── 5. Create services ────────────────────────────────────────────────
     _httpService = HttpService(baseUrl: 'https://mp3quran.net');
     _locationService = LocationService();
     _storageService = StorageService();
@@ -106,13 +101,11 @@ class _MyAppState extends State<MyApp> {
     _azkarService = AzkarService();
     _adhanScheduler = AdhanScheduler(_audioService!, _storageService!);
 
-    // ✅ FIX 1: يحمّل كاش الأذان فوراً قبل ما تتبني الـ UI
-    // → scheduledTime يكون محدد من أول ما HomeView تظهر
-    // → يحل مشكلة "غير متاح" عند إعادة فتح التطبيق
     _adhanScheduler!.rescheduleFromCache();
 
     if (mounted) {
-      final showOnboarding = !(_storageService?.isOnboardingCompleted ?? false);
+      final showOnboarding =
+          !(_storageService?.isOnboardingCompleted ?? false);
       setState(() {
         _isBootstrapping = false;
         _showOnboarding = showOnboarding;
@@ -145,18 +138,13 @@ class _MyAppState extends State<MyApp> {
         Provider<StorageService>.value(value: storage),
         Provider<AudioServiceWrapper>.value(value: audio),
         ChangeNotifierProvider<AdhanScheduler>.value(value: scheduler),
-
         ChangeNotifierProvider<SettingsController>(
           create: (_) => SettingsController(storage, scheduler, audio),
         ),
-
-        // ✅ FIX 2: lazy: false — ينشأ فوراً ولا ينتظر تاب الصلاة
-        // → يضمن تحميل الكاش وجدولة الأذان في أول فريم
         ChangeNotifierProvider<PrayerController>(
           lazy: false,
           create: (_) => PrayerController(prayer, location, scheduler),
         ),
-
         ChangeNotifierProvider<RadioController>(
           create: (_) {
             final ctrl = RadioController(radio, storage, audio);
@@ -190,13 +178,15 @@ class _MyAppState extends State<MyApp> {
             builder: (context, child) {
               final isRtl = settings.locale.languageCode == 'ar';
               return Directionality(
-                textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+                textDirection:
+                    isRtl ? TextDirection.rtl : TextDirection.ltr,
                 child: child!,
               );
             },
             home: _showOnboarding
                 ? OnboardingView(
-                    onComplete: () => setState(() => _showOnboarding = false),
+                    onComplete: () =>
+                        setState(() => _showOnboarding = false),
                   )
                 : const MainNavigationScaffold(),
           );
@@ -205,6 +195,7 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  // ── Splash Screen ✅ مع صورة التطبيق ──────────────────────────────────────
   Widget _buildSplash() {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -212,53 +203,73 @@ class _MyAppState extends State<MyApp> {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       home: Scaffold(
-        backgroundColor: AppTheme.primaryEmerald,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppTheme.primaryEmerald, Color(0xFF1A5C4A)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // ✅ صورة التطبيق بدل أيقونة المسجد
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 28,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/icon/icon.png',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
                 ),
-                child: const Icon(
-                  Icons.mosque_rounded,
-                  size: 48,
-                  color: Colors.white,
+                const SizedBox(height: 24),
+                const Text(
+                  'خليك مؤمن',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.2,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'خليك مؤمن',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 1.2,
+                const SizedBox(height: 8),
+                Text(
+                  'استمع • تعلم • تذكر',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.75),
+                    letterSpacing: 0.5,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'استمع • تعلم • تذكر',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.white.withValues(alpha: 0.75),
-                  letterSpacing: 0.5,
+                const SizedBox(height: 52),
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 48),
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

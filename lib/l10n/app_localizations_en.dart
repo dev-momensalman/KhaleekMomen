@@ -103,7 +103,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adhanAutoplaySubtitle =>
-      'Play the Adhan notification audio automatically at prayer times.';
+      'Play the Adhan automatically at each prayer time.';
 
   @override
   String get personalization => 'Personalization';
@@ -125,11 +125,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dataSafetySubtitle =>
-      'All calculation coordinates and storage parameters stay 100% offline on your device.';
+      'All data stays 100% offline on your device. Never shared.';
 
   @override
   String get privacySnackbar =>
-      'Privacy Guard: Coordinates are processed locally on your device.';
+      'Privacy Guard: All data is processed locally on your device.';
 
   @override
   String nextPrayer(String name) {
@@ -137,13 +137,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get liveDeviceScheduler => 'Live Device Time Scheduler';
+  String get liveDeviceScheduler => 'Device Time';
 
   @override
   String get recentlyPlayed => 'Recently Played';
 
   @override
-  String get exploreHub => 'Explore Hub';
+  String get exploreHub => 'Explore';
 
   @override
   String get islamicRadio => 'Islamic Radio';
@@ -199,7 +199,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kaabaDirAngle => 'Kaaba Direction Angle';
 
   @override
-  String get relativeToBearing => 'Calculated relative to North bearing';
+  String get relativeToBearing => 'Calculated relative to North';
 
   @override
   String qiblaDegrees(String degrees) {
@@ -212,30 +212,30 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get updateCoordinates => 'Update coordinates';
+  String get updateCoordinates => 'Update Location';
 
   @override
-  String get noConnectionOffline => 'No Connection / Offline';
+  String get noConnectionOffline => 'No Internet Connection';
 
   @override
-  String get cachedOfflineData => 'Cached Offline Data';
+  String get cachedOfflineData => 'Cached Data';
 
   @override
-  String get liveApiSynced => 'Live API Synchronized';
+  String get liveApiSynced => 'Live Synced';
 
   @override
   String get prayerTimesUnavailable => 'Prayer Times Unavailable';
 
   @override
   String get prayerTimesDefaultError =>
-      'Please enable location permissions and connect to the internet to calculate prayer schedules.';
+      'Please enable location permissions and connect to the internet to calculate prayer times.';
 
   @override
-  String get retryFetching => 'Retry Fetching';
+  String get retryFetching => 'Retry';
 
   @override
   String get coordsUnavailable =>
-      'Coordinates unavailable. Cannot calculate Qibla direction.';
+      'Location unavailable. Cannot calculate Qibla direction.';
 
   @override
   String get fajr => 'Fajr';
@@ -273,7 +273,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noSurahFavoritesMsg =>
-      'Select a reciter, browse surahs, and add your favorite chapters here.';
+      'Select a reciter, browse surahs, and add your favorites here.';
 
   @override
   String get searchRadioStations => 'Search Radio Stations...';
@@ -313,7 +313,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get permissionDeniedBody =>
-      'This permission was permanently denied. Please enable it from app settings to use this feature.';
+      'This permission was denied. Please enable it from app settings.';
 
   @override
   String get openSettings => 'Open Settings';
@@ -326,117 +326,124 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardWelcomeSubtitle =>
-      'Your complete Islamic companion for Quran, prayer times, live radio, and daily Azkar — all in one beautiful app.';
+      'Your companion for Quran, prayer times, and daily Azkar — all in one app.';
 
   @override
-  String get onboardFeatureQuran =>
-      'Listen to the Holy Quran with world-class reciters';
+  String get onboardFeatureQuran => 'Listen to the Quran with top reciters';
 
   @override
-  String get onboardFeaturePrayer =>
-      'Accurate prayer times with automatic Adhan';
+  String get onboardFeaturePrayer => 'Accurate prayer times with auto Adhan';
 
   @override
-  String get onboardFeatureRadio =>
-      'Live Islamic radio stations from around the world';
+  String get onboardFeatureRadio => 'Live Islamic radio stations';
 
   @override
-  String get onboardFeatureAzkar =>
-      'Morning, evening and sleep Azkar reminders';
+  String get onboardFeatureAzkar => 'Morning, evening & sleep Azkar';
 
   @override
-  String get onboardLocationTitle => 'Location Permission';
+  String get onboardLocationTitle => 'Location for Prayer Times';
 
   @override
   String get onboardLocationSubtitle =>
-      'We need your location to calculate precise prayer times and Qibla direction for your city.';
+      'We use your location only to calculate prayer times and show the Qibla direction. Never shared.';
 
   @override
   String get onboardWhyNeeded => 'Why we need this:';
 
   @override
   String get onboardLocationBullet1 =>
-      'Calculate the 5 daily prayer times based on your exact coordinates';
+      'Calculate accurate prayer times for your city';
 
   @override
   String get onboardLocationBullet2 =>
-      'Show the precise Qibla compass direction toward the Kaaba';
+      'Show the Qibla direction toward the Kaaba';
 
   @override
   String get onboardLocationBullet3 =>
-      'Your location is processed 100% locally — never uploaded to any server';
+      'Your location is processed locally — never uploaded';
 
   @override
   String get onboardGrantLocation => 'Allow Location Access';
 
   @override
+  String get onboardAdhanTitle => 'Adhan Permissions';
+
+  @override
+  String get onboardAdhanSubtitle =>
+      'Grant these so the Adhan always reaches you on time.';
+
+  @override
+  String get onboardNotifLabel => 'Prayer Notifications';
+
+  @override
   String get onboardNotifTitle => 'Prayer Notifications';
 
   @override
-  String get onboardNotifSubtitle =>
-      'Allow notifications so the app can alert you when each prayer time arrives, even when the screen is off.';
+  String get onboardNotifSubtitle => 'Get notified at each prayer time.';
 
   @override
   String get onboardNotifBullet1 =>
-      'Receive a notification at each of the 5 daily prayer times';
+      'Receive a notification at each prayer time';
 
   @override
-  String get onboardNotifBullet2 =>
-      'Notifications play your selected Adhan sound automatically';
+  String get onboardNotifBullet2 => 'Plays your selected Adhan automatically';
 
   @override
   String get onboardNotifBullet3 =>
-      'You can disable individual prayers anytime from Settings';
+      'Disable individual prayers anytime from Settings';
 
   @override
   String get onboardGrantNotif => 'Allow Notifications';
 
   @override
-  String get onboardAlarmTitle => 'Exact Alarm Permission';
+  String get onboardAlarmLabel => 'Precise Adhan Timing';
+
+  @override
+  String get onboardAlarmTitle => 'Precise Adhan Timing';
 
   @override
   String get onboardAlarmSubtitle =>
-      'Android requires special permission to schedule alarms at exact times — essential for prayers that cannot be late.';
+      'Ensures the Adhan fires at the exact prayer time.';
 
   @override
-  String get onboardAlarmBullet1 =>
-      'Ensures Adhan fires at the precise prayer time, not minutes late';
+  String get onboardAlarmBullet1 => 'Adhan fires at the exact minute, not late';
 
   @override
   String get onboardAlarmBullet2 =>
-      'Required by Android for exact-time scheduling (API 31+)';
+      'Required for reliable prayer time delivery';
 
   @override
   String get onboardAlarmBullet3 =>
-      'Without this, prayer notifications may be delayed by the OS';
+      'Without this, notifications may be delayed';
 
   @override
-  String get onboardGrantAlarm => 'Allow Exact Alarms';
+  String get onboardGrantAlarm => 'Allow Precise Alarms';
 
   @override
-  String get onboardBatteryTitle => 'Battery Optimization';
+  String get onboardBatteryLabel => 'Background Activity';
+
+  @override
+  String get onboardBatteryTitle => 'Background Activity';
 
   @override
   String get onboardBatterySubtitle =>
-      'Disable battery optimization for this app so the Adhan continues to work reliably when your phone is idle or the screen is off.';
+      'Keep the Adhan working even when the screen is off.';
 
   @override
-  String get onboardBatteryBullet1 =>
-      'Prevents Android from killing the Adhan scheduler in Doze mode';
+  String get onboardBatteryBullet1 => 'Ensures the Adhan plays even overnight';
 
   @override
-  String get onboardBatteryBullet2 =>
-      'Ensures prayer alarms fire even overnight or during long screen-off periods';
+  String get onboardBatteryBullet2 => 'Minimal battery impact';
 
   @override
   String get onboardBatteryBullet3 =>
-      'The app uses minimal battery — this only removes the delay restriction';
+      'Only removes the background delay restriction';
 
   @override
-  String get onboardGrantBattery => 'Disable Battery Restriction';
+  String get onboardGrantBattery => 'Disable Battery Restrictions';
 
   @override
-  String get onboardPermissionGranted => 'Permission granted';
+  String get onboardPermissionGranted => 'Enabled ✓';
 
   @override
   String get onboardDoneTitle => 'You\'re All Set!';
@@ -446,19 +453,19 @@ class AppLocalizationsEn extends AppLocalizations {
       'KhaleekMomen is ready. May Allah accept your worship and keep you consistent in prayer.';
 
   @override
-  String get onboardDoneNotif => 'Prayer notifications enabled';
+  String get onboardDoneNotif => 'Prayer Notifications';
 
   @override
-  String get onboardDoneAlarm => 'Exact Adhan alarms configured';
+  String get onboardDoneAlarm => 'Adhan Alarms';
 
   @override
-  String get onboardDoneBattery => 'Reliable background delivery';
+  String get onboardDoneBattery => 'Background Adhan';
 
   @override
   String get onboardNext => 'Next';
 
   @override
-  String get onboardFinish => 'Start Using App';
+  String get onboardFinish => 'Start the App';
 
   @override
   String get tafsirTitle => 'Tafsir';
@@ -474,13 +481,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get translationLabel => 'Translation';
 
   @override
-  String get copyAyah => 'Copy verse';
+  String get copyAyah => 'Copy Verse';
 
   @override
-  String get ayahCopied => 'Verse copied to clipboard';
+  String get ayahCopied => 'Verse copied';
 
   @override
-  String get jumpToAyah => 'Jump to verse';
+  String get jumpToAyah => 'Jump to Verse';
 
   @override
   String get ayahNumberHint => 'Verse number';
