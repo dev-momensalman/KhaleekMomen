@@ -351,9 +351,10 @@ class NotificationService {
     }
   }
 
-  // ── IMMEDIATE ADHAN NOTIFICATION (BUG FIX #1) ────────────────────────────
+  // ── IMMEDIATE ADHAN NOTIFICATION ─────────────────────────────────────────
   // Called by AdhanScheduler._triggerAdhan() when the in-process timer fires.
   // Shows a heads-up banner even when the app is in the foreground.
+  // playSound: false — الصوت يُشغَّل عبر AdhanPlayer.
 
   static Future<void> showImmediateAdhanNotification(String arabicName) async {
     if (!_isInitialized) return;
@@ -372,7 +373,7 @@ class NotificationService {
             'إشعار الأذان الفوري',
             description: 'يظهر عند حلول وقت الصلاة',
             importance: Importance.max,
-            playSound: false, // الصوت يُشغَّل عبر AudioService
+            playSound: false,
             enableVibration: true,
             enableLights: true,
           ),
@@ -412,6 +413,8 @@ class NotificationService {
     }
   }
 
+  // ── CANCEL IMMEDIATE ADHAN (ID 200) ──────────────────────────────────────
+
   /// Cancel the immediate adhan banner (ID 200) after adhan finishes.
   static Future<void> cancelAdhanNotification() async {
     if (!_isInitialized) return;
@@ -428,7 +431,20 @@ class NotificationService {
       );
     }
   }
-  // ── CANCEL ────────────────────────────────────────────────────────────────
+
+  // ✅ NEW: Cancel any single notification by ID
+  /// Cancel a single notification by its ID (e.g., scheduled prayer 101–105).
+  static Future<void> cancelById(int id) async {
+    if (!_isInitialized) return;
+    try {
+      await _plugin.cancel(id);
+      developer.log('Notification $id cancelled.', name: 'NotificationService');
+    } catch (e) {
+      developer.log('cancelById($id) error: $e', name: 'NotificationService');
+    }
+  }
+
+  // ── CANCEL ALL ────────────────────────────────────────────────────────────
 
   static Future<void> cancelAllPrayerNotifications() async {
     try {

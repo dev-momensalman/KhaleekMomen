@@ -28,6 +28,15 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     'Isha': 'العشاء',
   };
 
+  // ✅ Map: prayer name → OS scheduled notification ID (101–105)
+  static const Map<String, int> _prayerNotifIds = {
+    'Fajr': 101,
+    'Dhuhr': 102,
+    'Asr': 103,
+    'Maghrib': 104,
+    'Isha': 105,
+  };
+
   // Network fallback — only used if ALL local assets fail
   static const String _fallbackAdhanUrl =
       'https://download.quranicaudio.com/adhan/azan_makkah.mp3';
@@ -230,27 +239,42 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    // ── 1. Show notification banner (foreground-safe, no duplicate sound) ──
-    // playSound: false in this channel — audio is handled by AdhanPlayer.
+    // ── 1. ✅ إلغاء الإشعار المجدول لهذه الصلاة (لمنع تضارب الصوت) ──────
+    // التطبيق حي = in-process timer يشغّل AdhanPlayer
+    // لا داعي لصوت الـ OS notification → نلغيه قبل ما يطلع
+    final notifId = _prayerNotifIds[prayerName];
+    if (notifId != null) {
+      NotificationService.cancelById(notifId);
+      developer.log(
+        'Cancelled OS scheduled notification $notifId for $prayerName',
+        name: 'AdhanScheduler',
+      );
+    }
+
+    // ── 2. إشعار فوري بدون صوت (banner فقط) ──────────────────────────────
     NotificationService.showImmediateAdhanNotification(arabicName);
 
-    // ── 2. Lock AudioService (stops Quran/Radio, blocks new media plays) ────
+    // ── 3. Lock AudioService (يوقف القرآن/الراديو) ────────────────────────
     _audioService.lockForAdhan(arabicName);
 
-    // ── 3. Resolve adhan sound ─────────────────────────────────────────────
+    // ── 4. Resolve adhan sound ─────────────────────────────────────────────
     final savedFile = _storageService.getSelectedAdhanSound();
     final selectedOption = AdhanSoundOption.fromFileName(
       savedFile.isEmpty ? null : savedFile,
     );
 
-    // ── 4. onComplete: called when adhan finishes (or fails with fallback) ──
+    // ── 5. onComplete: يُستدعى عند انتهاء الأذان (أو فشله) ───────────────
     void onComplete() {
       _audioService.unlockFromAdhan();
-      NotificationService.cancelAdhanNotification();
+      NotificationService.cancelAdhanNotification(); // ID 200
+      // ✅ إلغاء الإشعار المجدول لو لم يُلغَ بعد (احتياط)
+      if (notifId != null) {
+        NotificationService.cancelById(notifId);
+      }
       _rescheduleAfterFired();
     }
 
-    // ── 5. Play via AdhanPlayer (alarm stream, no media session) ────────────
+    // ── 6. Play via AdhanPlayer ────────────────────────────────────────────
     AdhanPlayer.play(selectedOption.assetPath, onComplete: onComplete)
         .then((_) {
           developer.log(

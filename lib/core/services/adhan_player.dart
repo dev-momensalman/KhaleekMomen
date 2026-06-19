@@ -6,6 +6,7 @@
 // - مفتاح الصوت يتحكم في صوت الـ media stream العادي
 // ─────────────────────────────────────────────────────────────────
 
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -18,6 +19,8 @@ class AdhanPlayer {
   static final AudioPlayer _player = AudioPlayer();
   static VoidCallback? _onComplete;
   static bool _isPlaying = false;
+  static StreamSubscription<PlayerState>?
+  _stateSub; // ✅ FIX: نحفظ الـ subscription
 
   static bool get isPlaying => _isPlaying;
 
@@ -26,7 +29,7 @@ class AdhanPlayer {
     String assetOrUrl, {
     VoidCallback? onComplete,
   }) async {
-    await stop();
+    await stop(); // بيلغي الـ subscription القديمة + يوقف أي صوت
     _onComplete = onComplete;
     _isPlaying = true;
 
@@ -51,13 +54,15 @@ class AdhanPlayer {
         );
       }
 
-      // ── Listen for natural completion ─────────────────────────
-      _player.playerStateStream.listen((state) {
+      // ✅ FIX: نحفظ الـ subscription ونلغيها بعد الاستخدام
+      _stateSub = _player.playerStateStream.listen((state) {
         if (state.processingState == ProcessingState.completed) {
           developer.log(
             'AdhanPlayer: completed naturally',
             name: 'AdhanPlayer',
           );
+          _stateSub?.cancel();
+          _stateSub = null;
           _isPlaying = false;
           final cb = _onComplete;
           _onComplete = null;
@@ -70,6 +75,8 @@ class AdhanPlayer {
       developer.log('AdhanPlayer: started → $assetOrUrl', name: 'AdhanPlayer');
     } catch (e) {
       developer.log('AdhanPlayer.play error: $e', name: 'AdhanPlayer');
+      _stateSub?.cancel();
+      _stateSub = null;
       _isPlaying = false;
       final cb = _onComplete;
       _onComplete = null;
@@ -80,6 +87,8 @@ class AdhanPlayer {
   // ── Stop ─────────────────────────────────────────────────────
   static Future<void> stop() async {
     try {
+      _stateSub?.cancel(); // ✅ FIX: إلغاء الـ subscription أولاً
+      _stateSub = null;
       _onComplete = null;
       _isPlaying = false;
       if (_player.playing) {
