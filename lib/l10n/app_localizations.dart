@@ -1112,6 +1112,12 @@ abstract class AppLocalizations {
   /// **'App Developer'**
   String get appDeveloper;
 
+  /// No description provided for @connect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get connect;
+
   /// No description provided for @reciterCount.
   ///
   /// In en, this message translates to:

@@ -551,6 +551,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get appDeveloper => 'مطور البرنامج';
 
   @override
+  String get connect => 'تواصل';
+
+  @override
   String reciterCount(int count) {
     return '$count قارئ';
   }

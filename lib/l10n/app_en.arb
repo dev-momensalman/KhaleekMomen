@@ -203,6 +203,7 @@
   "searchReciter": "Search reciter...",
   "noResultsFound": "No results found",
   "appDeveloper": "App Developer",
+  "connect": "Connect",
   "reciterCount": "{count} reciters",
   "@reciterCount": {
     "placeholders": {

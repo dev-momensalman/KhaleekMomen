@@ -549,6 +549,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appDeveloper => 'App Developer';
 
   @override
+  String get connect => 'Connect';
+
+  @override
   String reciterCount(int count) {
     return '$count reciters';
   }

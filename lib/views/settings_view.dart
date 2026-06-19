@@ -38,7 +38,6 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 24),
 
         // ── 2. صوت الأذان ────────────────────────────────────────────
-        // ✅ FIX: l10n.adhanSound بدل ternary
         _sectionHeader(context, l10n.adhanSound),
         Card(
           child: ListTile(
@@ -146,7 +145,6 @@ class SettingsView extends StatelessWidget {
         const SizedBox(height: 16),
 
         // ── 5. مطور البرنامج ─────────────────────────────────────────
-        // ✅ FIX: l10n.appDeveloper بدل ternary
         _sectionHeader(context, l10n.appDeveloper),
         _DevCard(isArabic: isArabic),
         const SizedBox(height: 100),
@@ -259,7 +257,6 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  // ✅ FIX: l10n.selectAdhanSound بدل نص عربي ثابت
                   l10n.selectAdhanSound,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
@@ -282,7 +279,6 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
               onChanged: (v) => setState(() => _query = v),
               textDirection: TextDirection.rtl,
               decoration: InputDecoration(
-                // ✅ FIX: l10n.searchReciter بدل نص عربي ثابت
                 hintText: l10n.searchReciter,
                 hintTextDirection: TextDirection.rtl,
                 prefixIcon: const Icon(Icons.search_rounded),
@@ -311,7 +307,6 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
             child: filtered.isEmpty
                 ? Center(
                     child: Text(
-                      // ✅ FIX: l10n.noResultsFound بدل نص عربي ثابت
                       l10n.noResultsFound,
                       style: TextStyle(
                         color: theme.colorScheme.onSurfaceVariant,
@@ -507,7 +502,6 @@ class _DevCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      // ✅ FIX: l10n.appDeveloper بدل ternary
                       l10n.appDeveloper,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
@@ -534,8 +528,9 @@ class _DevCard extends StatelessWidget {
                           icon: Icons.email_rounded,
                         ),
                         const Spacer(),
+                        // ✅ FIX: l10n.connect بدل isArabic ternary
                         Text(
-                          isArabic ? 'تواصل' : 'Connect',
+                          l10n.connect,
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.primary,
                             fontWeight: FontWeight.w600,

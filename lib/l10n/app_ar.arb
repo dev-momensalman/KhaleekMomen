@@ -203,6 +203,7 @@
   "searchReciter": "ابحث عن قارئ...",
   "noResultsFound": "لا توجد نتائج",
   "appDeveloper": "مطور البرنامج",
+  "connect": "تواصل",
   "reciterCount": "{count} قارئ",
   "@reciterCount": {
     "placeholders": {
