@@ -1,3 +1,5 @@
+// lib/widgets/global_player_bar.dart
+
 import 'package:flutter/material.dart';
 import 'package:islamic_audio_hub/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +24,7 @@ class GlobalPlayerBar extends StatelessWidget {
         }
 
         final isAdhan = state.mode == AudioMode.adhan;
+        final isRadio = state.mode == AudioMode.radio;
         final theme = Theme.of(context);
         final isDark = theme.brightness == Brightness.dark;
         final l10n = AppLocalizations.of(context)!;
@@ -36,6 +39,26 @@ class GlobalPlayerBar extends StatelessWidget {
             : (state.subtitle?.isNotEmpty == true
                   ? state.subtitle!
                   : _getModeSubtitle(context, state.mode));
+
+        // ── Label الصف الأول حسب الوضع ───────────────────────────
+        final String titleLabel;
+        if (isAdhan) {
+          titleLabel = '';
+        } else if (isRadio) {
+          titleLabel = 'المحطة: ';
+        } else {
+          titleLabel = 'سورة: ';
+        }
+
+        // ── Label الصف الثاني حسب الوضع ──────────────────────────
+        final String subtitleLabel;
+        if (isAdhan) {
+          subtitleLabel = '';
+        } else if (isRadio) {
+          subtitleLabel = 'الدولة: ';
+        } else {
+          subtitleLabel = 'القارئ: ';
+        }
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -90,20 +113,21 @@ class GlobalPlayerBar extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
 
-                      // ── Title & Subtitle ───────────────────────────────────────
+                      // ── Title & Subtitle ──────────────────────────────────
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  'سورة: ',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                    fontSize: 11,
+                                if (titleLabel.isNotEmpty)
+                                  Text(
+                                    titleLabel,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                      fontSize: 11,
+                                    ),
                                   ),
-                                ),
                                 Expanded(
                                   child: Text(
                                     title,
@@ -123,13 +147,14 @@ class GlobalPlayerBar extends StatelessWidget {
                             const SizedBox(height: 2),
                             Row(
                               children: [
-                                Text(
-                                  isAdhan ? '' : 'القارئ: ',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                    fontSize: 11,
+                                if (subtitleLabel.isNotEmpty)
+                                  Text(
+                                    subtitleLabel,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                      fontSize: 11,
+                                    ),
                                   ),
-                                ),
                                 Expanded(
                                   child: Text(
                                     subtitleText,
@@ -149,7 +174,11 @@ class GlobalPlayerBar extends StatelessWidget {
 
                       // ── Lock indicator ─────────────────────────
                       if (state.isLocked && !isAdhan) ...[
-                        Icon(Icons.lock_clock, color: Colors.orange, size: 18),
+                        const Icon(
+                          Icons.lock_clock,
+                          color: Colors.orange,
+                          size: 18,
+                        ),
                         const SizedBox(width: 4),
                       ],
 

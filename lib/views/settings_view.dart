@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:islamic_audio_hub/l10n/app_localizations.dart';
 import 'package:islamic_audio_hub/controllers/settings_controller.dart';
 import 'package:islamic_audio_hub/core/theme/app_theme.dart';
-import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
+// ✅ تم حذف: import 'adhan_sound_option.dart' — غير مستخدم في الـ view
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Settings View
