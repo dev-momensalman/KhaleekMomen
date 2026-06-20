@@ -4,20 +4,21 @@ import 'package:islamic_audio_hub/core/services/http_service.dart';
 import 'package:islamic_audio_hub/data/models/reciter.dart';
 import 'package:islamic_audio_hub/data/models/surah.dart';
 import 'package:islamic_audio_hub/data/models/ayah.dart';
+import 'package:quran/quran.dart' as qpkg; // ← نص القرآن كامل offline
 
 class QuranService {
   final HttpService _httpService;
 
-  // Al Quran Cloud text API — injected for testability and connection reuse
+  // Al Quran Cloud text API — used ONLY for tafsir (التفسير الميسر)
   final HttpService _textHttpService;
 
   QuranService(this._httpService)
     : _textHttpService = HttpService(baseUrl: 'https://api.alquran.cloud/v1');
-  // Note: For full DI, pass _textHttpService as a named constructor param.
-  // The current approach already avoids the field initializer issue and
-  // keeps construction deterministic while remaining override-friendly.
 
-  // Popular reciters curated list for offline/fallback cases
+  // ══════════════════════════════════════════════════════════════════════════
+  // DEFAULT RECITERS — offline fallback, always available
+  // ══════════════════════════════════════════════════════════════════════════
+
   final List<Reciter> _defaultReciters = [
     Reciter(
       id: '1',
@@ -51,7 +52,13 @@ class QuranService {
     ),
   ];
 
-  // High-performance static metadata list of Surahs
+  /// Public getter — used by QuranController as guaranteed offline fallback.
+  List<Reciter> get defaultReciters => List.unmodifiable(_defaultReciters);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 114 SURAH METADATA — fully offline, static
+  // ══════════════════════════════════════════════════════════════════════════
+
   final List<Surah> _surahMetadataList = [
     Surah(
       number: 1,
@@ -967,6 +974,10 @@ class QuranService {
     ),
   ];
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // RECITERS — primary: mp3quran.net API | fallback: _defaultReciters
+  // ══════════════════════════════════════════════════════════════════════════
+
   /// Fetches the list of reciters from MP3Quran API.
   /// Falls back to our curated list of 5 premium reciters if network fails.
   Future<List<Reciter>> getReciters() async {
@@ -979,11 +990,8 @@ class QuranService {
             .map((item) {
               final id = item['id']?.toString() ?? '';
               final name = item['name']?.toString() ?? '';
-
-              // Locate the Hafs Riwayah (moshaf) to get correct audio server
               String server = '';
               String styleName = 'Hafs A\'n Assem';
-
               if (item['moshaf'] != null && item['moshaf'] is List) {
                 final moshafs = item['moshaf'] as List;
                 if (moshafs.isNotEmpty) {
@@ -992,7 +1000,6 @@ class QuranService {
                       moshafs[0]['name']?.toString() ?? 'Hafs A\'n Assem';
                 }
               }
-
               return Reciter(
                 id: id,
                 name: name,
@@ -1021,6 +1028,10 @@ class QuranService {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // SURAHS — 100% local, builds audio URLs per reciter
+  // ══════════════════════════════════════════════════════════════════════════
+
   /// Returns the static 114 Surahs list.
   /// This is offline-first, avoiding unnecessary server calls.
   List<Surah> getSurahs(Reciter reciter) {
@@ -1028,20 +1039,16 @@ class QuranService {
       'Getting surahs list for reciter: ${reciter.name}',
       name: 'QuranService',
     );
-    // Map each surah to its audio stream url based on reciter's base server URL
     return _surahMetadataList.map((surah) {
-      // Audio URLs are formatted as [server][paddedNumber].mp3
-      // e.g. https://server11.mp3quran.net/sudais/001.mp3
       final baseUrl = reciter.server.endsWith('/')
           ? reciter.server
           : '${reciter.server}/';
       final fileUrl = '$baseUrl${surah.paddedNumber}.mp3';
-
       return surah.copyWith(audioUrl: fileUrl);
     }).toList();
   }
 
-  /// Returns individual Surah by number
+  /// Returns individual Surah by number.
   Surah? getSurahByNumber(int number, Reciter reciter) {
     if (number < 1 || number > 114) return null;
     final surah = _surahMetadataList.firstWhere((s) => s.number == number);
@@ -1051,57 +1058,47 @@ class QuranService {
     return surah.copyWith(audioUrl: '$baseUrl${surah.paddedNumber}.mp3');
   }
 
-  /// Fetches the verses (Arabic Uthmani text + English translation) of a Surah.
-  /// First tries from the API. Falls back to a small static set of sample ayat if offline/error.
+  // ══════════════════════════════════════════════════════════════════════════
+  // VERSES — 100% LOCAL via `quran` package (6236 ayahs offline)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /// Returns all ayahs for a Surah from the local Quran package.
+  /// ✅ No internet required — works completely offline.
+  /// النص العربي محفوظ محلياً — الصوت فقط يحتاج إنترنت.
   Future<List<Ayah>> getSurahVerses(int surahNumber) async {
     developer.log(
-      'Fetching verses for surah: $surahNumber',
+      'Loading verses for surah $surahNumber (local — offline)',
       name: 'QuranService',
     );
     try {
-      final path = '/surah/$surahNumber/editions/quran-uthmanic,en.asad';
-      final response = await _textHttpService.get(path);
-
-      if (response != null &&
-          response['data'] != null &&
-          response['data'] is List) {
-        final editions = response['data'] as List<dynamic>;
-        if (editions.length >= 2) {
-          final arabicEdition = editions[0];
-          final englishEdition = editions[1];
-
-          final arabicAyahs = arabicEdition['ayahs'] as List<dynamic>;
-          final englishAyahs = englishEdition['ayahs'] as List<dynamic>;
-
-          final List<Ayah> ayahs = [];
-          for (int i = 0; i < arabicAyahs.length; i++) {
-            ayahs.add(
-              Ayah.fromJson(
-                arabicAyahs[i] as Map<String, dynamic>,
-                englishAyahs[i] as Map<String, dynamic>,
-              ),
-            );
-          }
-          return ayahs;
-        }
-      }
-      throw Exception('Failed to parse editions from Al Quran Cloud API.');
+      final verseCount = qpkg.getVerseCount(surahNumber);
+      return List.generate(verseCount, (i) {
+        final ayahNumber = i + 1;
+        return Ayah(
+          number: ayahNumber,
+          text: qpkg.getVerse(surahNumber, ayahNumber, verseEndSymbol: true),
+          translation: '',
+          tafsir: '', // ← String فارغة بدل null
+        );
+      });
     } catch (e) {
-      developer.log('Failed to fetch surah verses: $e', name: 'QuranService');
-      // Return cached sample verses for known surahs (Al-Fatihah, Al-Ikhlas)
+      developer.log(
+        'Error loading local verses for surah $surahNumber: $e',
+        name: 'QuranService',
+      );
+      // Emergency fallback للسورتين المعروفتين فقط
       if (_sampleVerses.containsKey(surahNumber)) {
         developer.log(
-          'Returning cached sample verses for surah $surahNumber',
+          'Returning emergency sample verses for surah $surahNumber',
           name: 'QuranService',
         );
         return _sampleVerses[surahNumber]!;
       }
-      // Re-throw so the UI can show a proper error message instead of fake data
       rethrow;
     }
   }
 
-  // Pre-configured high quality sample verses for offline fallback (Surah Al-Fatihah & Al-Ikhlas)
+  // Emergency static fallback (الفاتحة + الإخلاص)
   static final Map<int, List<Ayah>> _sampleVerses = {
     1: [
       Ayah(
@@ -1167,8 +1164,12 @@ class QuranService {
     ],
   };
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // TAFSIR — network (التفسير الميسر — ar.muyassar) — requires internet
+  // ══════════════════════════════════════════════════════════════════════════
+
   /// Fetches Arabic Muyassar tafsir for a single ayah.
-  /// Returns a list with one Ayah; the [translation] field holds the tafsir text.
+  /// Returns a list with one Ayah; the [tafsir] field holds the tafsir text.
   Future<List<Ayah>> getAyahTafsir(int surahNumber, int ayahNumber) async {
     developer.log(
       'Fetching tafsir for $surahNumber:$ayahNumber',

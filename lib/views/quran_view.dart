@@ -29,7 +29,8 @@ class _QuranViewState extends State {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final quranController = Provider.of(context);
+    // ✅ الصح — حدد النوع صراحةً
+    final quranController = Provider.of<QuranController>(context);
     final isDark = theme.brightness == Brightness.dark;
 
     final filteredSurahs = quranController.surahs.where((surah) {

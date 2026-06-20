@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-
+  quran: ^1.0.2
   url_launcher: ^6.3.0
   cupertino_icons: ^1.0.8
   just_audio: ^0.9.43
@@ -53,8 +53,7 @@ flutter:
         - asset: assets/fonts/QuranUthmani.ttf
 
   assets:
-    - assets/icon/icon.png        # ← أضف هذا السطر
-
+    - assets/icon/icon.png
     - assets/audio/adhan_makkah.mp3
     - assets/audio/adhan_alafasy.mp3
     - assets/audio/adhan_abdulbasit.mp3
