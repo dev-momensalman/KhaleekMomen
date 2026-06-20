@@ -2,14 +2,16 @@
 
 import 'dart:async';
 import 'dart:developer' as developer;
+
 import 'package:flutter/widgets.dart';
+import 'package:intl/intl.dart';
+
 import 'package:islamic_audio_hub/core/services/adhan_player.dart';
 import 'package:islamic_audio_hub/core/services/audio_service.dart';
 import 'package:islamic_audio_hub/core/services/notification_service.dart';
 import 'package:islamic_audio_hub/core/services/storage_service.dart';
-import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
-import 'package:intl/intl.dart';
+import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 
 class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
   final AudioServiceWrapper _audioService;
@@ -28,8 +30,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     'Isha': 'العشاء',
   };
 
-  // ✅ Map: prayer name → OS scheduled notification ID (101–105)
-  static const Map<String, int> _prayerNotifIds = {
+  static const Map<String, int> _legacyPrayerNotifIds = {
     'Fajr': 101,
     'Dhuhr': 102,
     'Asr': 103,
@@ -37,7 +38,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     'Isha': 105,
   };
 
-  // Network fallback — only used if ALL local assets fail
   static const String _fallbackAdhanUrl =
       'https://download.quranicaudio.com/adhan/azan_makkah.mp3';
 
@@ -47,65 +47,80 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
   // ── PUBLIC API ─────────────────────────────────────────────────────────────
 
-  Future<void> scheduleNextAdhan(PrayerTimes? prayerTimes) async {
+  Future<void> scheduleNextAdhan(
+    PrayerTimes? prayerTimes, {
+    PrayerTimes? tomorrowPrayerTimes,
+  }) async {
     _cancelTimer();
     _hasBeenScheduled = true;
 
-    if (prayerTimes == null || !prayerTimes.isValidChronologically()) {
+    if (prayerTimes == null) {
       developer.log(
-        'Cannot schedule Adhan: PrayerTimes is null or invalid.',
+        'Cannot schedule Adhan: PrayerTimes is null.',
         name: 'AdhanScheduler',
       );
-      NotificationService.cancelAllPrayerNotifications();
+
+      await NotificationService.cancelAllPrayerNotifications();
       notifyListeners();
       return;
     }
 
-    // 1. In-process Timer (sync — sets _scheduledTime immediately)
-    _scheduleInProcessTimer(prayerTimes);
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-    // 2. OS notifications (async — runs in background)
+    final effectiveTodayPrayerTimes = prayerTimes.isForToday
+        ? prayerTimes
+        : prayerTimes.withDate(todayStr);
+
+    if (!effectiveTodayPrayerTimes.isValidChronologically()) {
+      developer.log(
+        'Cannot schedule Adhan: PrayerTimes is invalid.',
+        name: 'AdhanScheduler',
+      );
+
+      await NotificationService.cancelAllPrayerNotifications();
+      notifyListeners();
+      return;
+    }
+
+    final effectiveTomorrowPrayerTimes =
+        tomorrowPrayerTimes ?? _getCachedTomorrowPrayerTimes();
+
+    _scheduleInProcessTimer(
+      effectiveTodayPrayerTimes,
+      tomorrowPrayerTimes: effectiveTomorrowPrayerTimes,
+    );
+
     if (_storageService.isAdhanAutoPlayEnabled()) {
-      PrayerTimes? tomorrowPt;
-      final tomorrowJson = _storageService.get('cached_prayer_times_tomorrow');
-      if (tomorrowJson != null) {
-        try {
-          final tomorrowStr = DateFormat(
-            'yyyy-MM-dd',
-          ).format(DateTime.now().add(const Duration(days: 1)));
-          final cached = PrayerTimes.fromJson(
-            Map<String, dynamic>.from(tomorrowJson),
-          );
-          if (cached.date == tomorrowStr && cached.isValidChronologically()) {
-            tomorrowPt = cached;
-          }
-        } catch (_) {}
-      }
-
       await NotificationService.schedulePrayerNotifications(
-        prayerTimes,
+        effectiveTodayPrayerTimes,
         storage: _storageService,
-        tomorrowPrayerTimes: tomorrowPt,
+        tomorrowPrayerTimes: effectiveTomorrowPrayerTimes,
       );
     } else {
       developer.log(
-        'Adhan autoplay disabled — skipping OS notification scheduling.',
+        'Adhan autoplay disabled — cancelling OS/native notification scheduling.',
         name: 'AdhanScheduler',
       );
+
+      await NotificationService.cancelAllPrayerNotifications();
     }
 
     notifyListeners();
   }
 
   DateTime? get scheduledTime => _scheduledTime;
+
   String? get scheduledPrayerName => _scheduledPrayerName;
+
   bool get hasBeenScheduled => _hasBeenScheduled;
 
   String? get scheduledPrayerNameArabic => _scheduledPrayerName != null
       ? _arabicNames[_scheduledPrayerName] ?? _scheduledPrayerName
       : null;
 
-  void rescheduleFromCache() => _rescheduleAfterFired();
+  void rescheduleFromCache() {
+    _rescheduleAfterFired();
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -114,6 +129,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         'App resumed — recalculating Adhan schedule.',
         name: 'AdhanScheduler',
       );
+
       _rescheduleAfterFired();
     }
   }
@@ -125,14 +141,77 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     super.dispose();
   }
 
+  // ── CACHE HELPERS ─────────────────────────────────────────────────────────
+
+  PrayerTimes? _getCachedTodayPrayerTimes() {
+    final cachedJson = _storageService.get('cached_prayer_times');
+    if (cachedJson == null) return null;
+
+    try {
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      final cached = PrayerTimes.fromJson(
+        Map<String, dynamic>.from(cachedJson),
+      );
+
+      if (cached.date == todayStr && cached.isValidChronologically()) {
+        return cached;
+      }
+
+      if (cached.isValidChronologically()) {
+        return cached.withDate(todayStr);
+      }
+
+      return null;
+    } catch (e) {
+      developer.log(
+        'Failed to parse cached today prayer times: $e',
+        name: 'AdhanScheduler',
+      );
+      return null;
+    }
+  }
+
+  PrayerTimes? _getCachedTomorrowPrayerTimes() {
+    final tomorrowCachedJson = _storageService.get(
+      'cached_prayer_times_tomorrow',
+    );
+
+    if (tomorrowCachedJson == null) return null;
+
+    try {
+      final tomorrowStr = DateFormat(
+        'yyyy-MM-dd',
+      ).format(DateTime.now().add(const Duration(days: 1)));
+
+      final cached = PrayerTimes.fromJson(
+        Map<String, dynamic>.from(tomorrowCachedJson),
+      );
+
+      if (cached.date == tomorrowStr && cached.isValidChronologically()) {
+        return cached;
+      }
+
+      return null;
+    } catch (e) {
+      developer.log(
+        'Failed to parse cached tomorrow prayer times: $e',
+        name: 'AdhanScheduler',
+      );
+      return null;
+    }
+  }
+
   // ── IN-PROCESS TIMER ──────────────────────────────────────────────────────
 
   DateTime? _parseTimeOnDate(DateTime targetDate, String timeStr) {
     try {
       final timeParts = timeStr.split(':');
       if (timeParts.length != 2) return null;
+
       final hour = int.parse(timeParts[0].trim().split(' ')[0]);
       final minute = int.parse(timeParts[1].trim().split(' ')[0]);
+
       return DateTime(
         targetDate.year,
         targetDate.month,
@@ -145,26 +224,17 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  void _scheduleInProcessTimer(PrayerTimes prayerTimes) {
+  void _scheduleInProcessTimer(
+    PrayerTimes prayerTimes, {
+    PrayerTimes? tomorrowPrayerTimes,
+  }) {
     final now = DateTime.now();
-    final today = now;
-    final tomorrow = now.add(const Duration(days: 1));
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
 
-    PrayerTimes tomorrowTimes = prayerTimes;
-    final tomorrowCachedJson = _storageService.get(
-      'cached_prayer_times_tomorrow',
-    );
-    if (tomorrowCachedJson != null) {
-      try {
-        final tomorrowStr = DateFormat('yyyy-MM-dd').format(tomorrow);
-        final cached = PrayerTimes.fromJson(
-          Map<String, dynamic>.from(tomorrowCachedJson),
-        );
-        if (cached.date == tomorrowStr && cached.isValidChronologically()) {
-          tomorrowTimes = cached;
-        }
-      } catch (_) {}
-    }
+    final effectiveTomorrowPrayerTimes =
+        tomorrowPrayerTimes ??
+        prayerTimes.withDate(DateFormat('yyyy-MM-dd').format(tomorrow));
 
     final prayers = [
       _PrayerTimeEntry('Fajr', _parseTimeOnDate(today, prayerTimes.fajr)),
@@ -172,17 +242,27 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       _PrayerTimeEntry('Asr', _parseTimeOnDate(today, prayerTimes.asr)),
       _PrayerTimeEntry('Maghrib', _parseTimeOnDate(today, prayerTimes.maghrib)),
       _PrayerTimeEntry('Isha', _parseTimeOnDate(today, prayerTimes.isha)),
-      _PrayerTimeEntry('Fajr', _parseTimeOnDate(tomorrow, tomorrowTimes.fajr)),
+
+      _PrayerTimeEntry(
+        'Fajr',
+        _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.fajr),
+      ),
       _PrayerTimeEntry(
         'Dhuhr',
-        _parseTimeOnDate(tomorrow, tomorrowTimes.dhuhr),
+        _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.dhuhr),
       ),
-      _PrayerTimeEntry('Asr', _parseTimeOnDate(tomorrow, tomorrowTimes.asr)),
+      _PrayerTimeEntry(
+        'Asr',
+        _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.asr),
+      ),
       _PrayerTimeEntry(
         'Maghrib',
-        _parseTimeOnDate(tomorrow, tomorrowTimes.maghrib),
+        _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.maghrib),
       ),
-      _PrayerTimeEntry('Isha', _parseTimeOnDate(tomorrow, tomorrowTimes.isha)),
+      _PrayerTimeEntry(
+        'Isha',
+        _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.isha),
+      ),
     ];
 
     DateTime? nextPrayerTime;
@@ -190,6 +270,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
     for (final entry in prayers) {
       final t = entry.time;
+
       if (t != null && t.isAfter(now)) {
         if (nextPrayerTime == null || t.isBefore(nextPrayerTime)) {
           nextPrayerTime = t;
@@ -198,7 +279,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    if (nextPrayerTime == null) {
+    if (nextPrayerTime == null || nextPrayerName == null) {
       developer.log(
         'AdhanScheduler: No upcoming prayers found.',
         name: 'AdhanScheduler',
@@ -208,12 +289,13 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
     _scheduledTime = nextPrayerTime;
     _scheduledPrayerName = nextPrayerName;
+
     final duration = nextPrayerTime.difference(now);
 
     developer.log(
       'AdhanScheduler: next prayer = '
       '${_arabicNames[nextPrayerName] ?? nextPrayerName} '
-      'in ${duration.inSeconds}s',
+      'in ${duration.inSeconds}s at $nextPrayerTime',
       name: 'AdhanScheduler',
     );
 
@@ -222,7 +304,7 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
   // ── ADHAN TRIGGER ──────────────────────────────────────────────────────────
 
-  void _triggerAdhan(String prayerName) {
+  Future<void> _triggerAdhan(String prayerName) async {
     final arabicName = _arabicNames[prayerName] ?? prayerName;
 
     developer.log(
@@ -235,71 +317,84 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         'Adhan autoplay disabled — skipping audio.',
         name: 'AdhanScheduler',
       );
+
       _rescheduleAfterFired();
       return;
     }
 
-    // ── 1. ✅ إلغاء الإشعار المجدول لهذه الصلاة (لمنع تضارب الصوت) ──────
-    // التطبيق حي = in-process timer يشغّل AdhanPlayer
-    // لا داعي لصوت الـ OS notification → نلغيه قبل ما يطلع
-    final notifId = _prayerNotifIds[prayerName];
-    if (notifId != null) {
-      NotificationService.cancelById(notifId);
-      developer.log(
-        'Cancelled OS scheduled notification $notifId for $prayerName',
-        name: 'AdhanScheduler',
-      );
+    // مهم جدًا:
+    // لو التطبيق مفتوح وقت الأذان، الـ Timer الداخلي هيشغل الأذان.
+    // وفي نفس اللحظة ممكن يكون فيه Native Alarm متجدول لنفس الصلاة.
+    // لذلك بنلغي كل إشعارات/منبهات الأذان المجدولة قبل تشغيل الصوت الداخلي،
+    // وبعد انتهاء الأذان بنعمل reschedule من الكاش.
+    await NotificationService.cancelAllPrayerNotifications();
+
+    final legacyNotifId = _legacyPrayerNotifIds[prayerName];
+    if (legacyNotifId != null) {
+      await NotificationService.cancelById(legacyNotifId);
     }
 
-    // ── 2. إشعار فوري بدون صوت (banner فقط) ──────────────────────────────
-    NotificationService.showImmediateAdhanNotification(arabicName);
+    await NotificationService.showImmediateAdhanNotification(arabicName);
 
-    // ── 3. Lock AudioService (يوقف القرآن/الراديو) ────────────────────────
     _audioService.lockForAdhan(arabicName);
 
-    // ── 4. Resolve adhan sound ─────────────────────────────────────────────
     final savedFile = _storageService.getSelectedAdhanSound();
+
     final selectedOption = AdhanSoundOption.fromFileName(
       savedFile.isEmpty ? null : savedFile,
     );
 
-    // ── 5. onComplete: يُستدعى عند انتهاء الأذان (أو فشله) ───────────────
-    void onComplete() {
+    var completed = false;
+
+    Future<void> onComplete() async {
+      if (completed) return;
+      completed = true;
+
       _audioService.unlockFromAdhan();
-      NotificationService.cancelAdhanNotification(); // ID 200
-      // ✅ إلغاء الإشعار المجدول لو لم يُلغَ بعد (احتياط)
-      if (notifId != null) {
-        NotificationService.cancelById(notifId);
+
+      await NotificationService.cancelAdhanNotification();
+
+      if (legacyNotifId != null) {
+        await NotificationService.cancelById(legacyNotifId);
       }
+
       _rescheduleAfterFired();
     }
 
-    // ── 6. Play via AdhanPlayer ────────────────────────────────────────────
-    AdhanPlayer.play(selectedOption.assetPath, onComplete: onComplete)
-        .then((_) {
-          developer.log(
-            'AdhanPlayer: playing "${selectedOption.displayName}"',
-            name: 'AdhanScheduler',
-          );
-        })
-        .catchError((Object err) {
-          developer.log(
-            'AdhanPlayer failed: $err — trying network fallback.',
-            name: 'AdhanScheduler',
-          );
-          // Network fallback — only if asset fails
-          AdhanPlayer.play(
-            _fallbackAdhanUrl,
-            onComplete: onComplete,
-          ).catchError((Object e) {
-            developer.log(
-              'Fallback also failed: $e — unlocking anyway.',
-              name: 'AdhanScheduler',
-            );
-            // Even if everything fails, unlock and reschedule
-            onComplete();
-          });
-        });
+    try {
+      await AdhanPlayer.play(
+        selectedOption.assetPath,
+        onComplete: () {
+          unawaited(onComplete());
+        },
+      );
+
+      developer.log(
+        'AdhanPlayer: playing "${selectedOption.displayName}"',
+        name: 'AdhanScheduler',
+      );
+    } catch (err) {
+      developer.log(
+        'AdhanPlayer failed: $err — trying network fallback.',
+        name: 'AdhanScheduler',
+      );
+
+      try {
+        await AdhanPlayer.play(
+          _fallbackAdhanUrl,
+          onComplete: () {
+            unawaited(onComplete());
+          },
+        );
+      } catch (e) {
+        developer.log(
+          'Fallback also failed: $e — unlocking anyway.',
+          name: 'AdhanScheduler',
+        );
+
+        await onComplete();
+      }
+    }
   }
 
   // ── RESCHEDULE ─────────────────────────────────────────────────────────────
@@ -309,14 +404,24 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       'AdhanScheduler: rescheduling after adhan.',
       name: 'AdhanScheduler',
     );
-    final cachedJson = _storageService.get('cached_prayer_times');
-    if (cachedJson == null) return;
-    try {
-      final pt = PrayerTimes.fromJson(Map<String, dynamic>.from(cachedJson));
-      unawaited(scheduleNextAdhan(pt));
-    } catch (e) {
-      developer.log('Error rescheduling: $e', name: 'AdhanScheduler');
+
+    final todayPrayerTimes = _getCachedTodayPrayerTimes();
+    final tomorrowPrayerTimes = _getCachedTomorrowPrayerTimes();
+
+    if (todayPrayerTimes == null) {
+      developer.log(
+        'Cannot reschedule: no valid cached prayer times.',
+        name: 'AdhanScheduler',
+      );
+      return;
     }
+
+    unawaited(
+      scheduleNextAdhan(
+        todayPrayerTimes,
+        tomorrowPrayerTimes: tomorrowPrayerTimes,
+      ),
+    );
   }
 
   // ── TIMER CLEANUP ──────────────────────────────────────────────────────────
@@ -332,5 +437,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 class _PrayerTimeEntry {
   final String name;
   final DateTime? time;
+
   const _PrayerTimeEntry(this.name, this.time);
 }

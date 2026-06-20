@@ -1,14 +1,16 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
-import 'package:islamic_audio_hub/core/services/storage_service.dart';
+import 'package:intl/intl.dart';
+
 import 'package:islamic_audio_hub/core/services/adhan_scheduler.dart';
 import 'package:islamic_audio_hub/core/services/audio_service.dart';
 import 'package:islamic_audio_hub/core/services/notification_service.dart';
-import 'package:islamic_audio_hub/data/models/prayer_times.dart';
-import 'package:islamic_audio_hub/data/models/audio_state.dart';
+import 'package:islamic_audio_hub/core/services/storage_service.dart';
 import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
-import 'package:intl/intl.dart';
+import 'package:islamic_audio_hub/data/models/audio_state.dart';
+import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 
 class SettingsController extends ChangeNotifier {
   final StorageService _storageService;
@@ -18,9 +20,11 @@ class SettingsController extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   Locale _locale = const Locale('ar');
   bool _adhanAutoPlay = true;
+
   Timer? _debounceTimer;
 
   // ── Adhan Sound ───────────────────────────────────────────────────────────
+
   AdhanSoundOption _selectedAdhan = AdhanSoundOption.all.first;
   bool _isPreviewing = false;
   AdhanSoundOption? _previewedAdhan;
@@ -35,16 +39,20 @@ class SettingsController extends ChangeNotifier {
     _listenToAudioState();
   }
 
+  // ── LISTEN TO AUDIO STATE ─────────────────────────────────────────────────
+
   void _listenToAudioState() {
     _audioSubscription = _audioService.stateStream.listen((state) {
       final isNowPreviewing =
           state.isPlaying &&
           state.mode == AudioMode.quran &&
-          AdhanSoundOption.all.any((o) => o.displayName == state.currentSource);
+          AdhanSoundOption.all.any(
+            (option) => option.displayName == state.currentSource,
+          );
 
       final playingAdhan = isNowPreviewing
           ? AdhanSoundOption.all.firstWhere(
-              (o) => o.displayName == state.currentSource,
+              (option) => option.displayName == state.currentSource,
             )
           : null;
 
@@ -56,14 +64,23 @@ class SettingsController extends ChangeNotifier {
     });
   }
 
+  // ── GETTERS ────────────────────────────────────────────────────────────────
+
   ThemeMode get themeMode => _themeMode;
+
   Locale get locale => _locale;
+
   bool get adhanAutoPlay => _adhanAutoPlay;
 
   List<AdhanSoundOption> get availableAdhans => AdhanSoundOption.all;
+
   AdhanSoundOption get selectedAdhan => _selectedAdhan;
+
   bool get isPreviewing => _isPreviewing;
+
   AdhanSoundOption? get previewedAdhan => _previewedAdhan;
+
+  // ── LOAD SETTINGS ─────────────────────────────────────────────────────────
 
   void _loadSettings() {
     final themeStr = _storageService.getThemeMode();
@@ -92,11 +109,15 @@ class SettingsController extends ChangeNotifier {
     }
   }
 
+  // ── THEME / LANGUAGE ──────────────────────────────────────────────────────
+
   Future<void> updateThemeMode(ThemeMode mode) async {
     _themeMode = mode;
+
     String modeStr = 'system';
     if (mode == ThemeMode.light) modeStr = 'light';
     if (mode == ThemeMode.dark) modeStr = 'dark';
+
     await _storageService.setThemeMode(modeStr);
     notifyListeners();
   }
@@ -107,86 +128,49 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── ADHAN ENABLE / DISABLE ────────────────────────────────────────────────
+
   Future<void> updateAdhanAutoPlay(bool enabled) async {
     _adhanAutoPlay = enabled;
     notifyListeners();
 
     _debounceTimer?.cancel();
+
     _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
       await _storageService.setAdhanAutoPlay(enabled);
+
       if (enabled) {
-        final cachedJson = _storageService.get('cached_prayer_times');
-        if (cachedJson != null) {
-          try {
-            final pt = PrayerTimes.fromJson(
-              Map<String, dynamic>.from(cachedJson),
-            );
-            unawaited(_adhanScheduler.scheduleNextAdhan(pt));
-          } catch (e) {
-            developer.log(
-              'Error parsing cached prayer times on toggle enable: $e',
-              name: 'SettingsController',
-            );
-          }
-        }
+        await _rescheduleAdhanFromCache(reason: 'adhan autoplay enabled');
       } else {
         await NotificationService.cancelAllPrayerNotifications();
+
         stopPreview();
+
         if (_audioService.currentState.mode == AudioMode.adhan) {
           await _audioService.stop();
         }
+
+        developer.log(
+          'Adhan autoplay disabled — all notifications/native alarms cancelled.',
+          name: 'SettingsController',
+        );
       }
     });
   }
 
-  // ── Adhan Sound Methods ───────────────────────────────────────────────────
+  // ── ADHAN SOUND METHODS ───────────────────────────────────────────────────
 
-  // FIX: Also load tomorrow's cached prayer times when rescheduling after
-  // sound change. Without this, if all today's prayers have passed, the
-  // reschedule uses today's times for tomorrow's slots — meaning Fajr
-  // notification tomorrow fires at today's Fajr time (approximate, not exact).
   Future<void> selectAdhan(AdhanSoundOption option) async {
     stopPreview();
+
     _selectedAdhan = option;
     await _storageService.saveSelectedAdhanSound(option.fileName);
+
     notifyListeners();
 
-    final cachedJson = _storageService.get('cached_prayer_times');
-    if (cachedJson != null) {
-      try {
-        final pt = PrayerTimes.fromJson(Map<String, dynamic>.from(cachedJson));
-
-        // Load tomorrow's cached times for accurate next-day scheduling
-        PrayerTimes? tomorrowPt;
-        final tomorrowJson = _storageService.get(
-          'cached_prayer_times_tomorrow',
-        );
-        if (tomorrowJson != null) {
-          try {
-            final tomorrowStr = DateFormat(
-              'yyyy-MM-dd',
-            ).format(DateTime.now().add(const Duration(days: 1)));
-            final cached = PrayerTimes.fromJson(
-              Map<String, dynamic>.from(tomorrowJson),
-            );
-            if (cached.date == tomorrowStr && cached.isValidChronologically()) {
-              tomorrowPt = cached;
-            }
-          } catch (_) {}
-        }
-
-        await NotificationService.schedulePrayerNotifications(
-          pt,
-          storage: _storageService,
-          tomorrowPrayerTimes: tomorrowPt, // FIX: was missing
-        );
-      } catch (e) {
-        developer.log(
-          'Error rescheduling notifications on sound change: $e',
-          name: 'SettingsController',
-        );
-      }
-    }
+    await _rescheduleAdhanFromCache(
+      reason: 'adhan sound changed to ${option.displayName}',
+    );
   }
 
   Future<void> previewAdhan(AdhanSoundOption option) async {
@@ -197,11 +181,13 @@ class SettingsController extends ChangeNotifier {
       );
       return;
     }
+
     stopPreview();
+
     try {
       await _audioService.play(
         option.assetPath,
-        AudioMode.quran, // interruptible, not locked
+        AudioMode.quran,
         title: option.displayName,
         subtitle: 'معاينة الأذان',
       );
@@ -211,8 +197,100 @@ class SettingsController extends ChangeNotifier {
   }
 
   void stopPreview() {
-    _audioService.stop();
+    unawaited(_audioService.stop());
   }
+
+  // ── RESCHEDULE HELPERS ────────────────────────────────────────────────────
+
+  Future<void> _rescheduleAdhanFromCache({required String reason}) async {
+    final todayPrayerTimes = _getCachedTodayPrayerTimes();
+    final tomorrowPrayerTimes = _getCachedTomorrowPrayerTimes();
+
+    if (todayPrayerTimes == null) {
+      developer.log(
+        'Cannot reschedule Adhan after $reason: no valid cached prayer times.',
+        name: 'SettingsController',
+      );
+      return;
+    }
+
+    try {
+      await _adhanScheduler.scheduleNextAdhan(
+        todayPrayerTimes,
+        tomorrowPrayerTimes: tomorrowPrayerTimes,
+      );
+
+      developer.log(
+        'Adhan rescheduled successfully after $reason.',
+        name: 'SettingsController',
+      );
+    } catch (e, st) {
+      developer.log(
+        'Error rescheduling Adhan after $reason: $e\n$st',
+        name: 'SettingsController',
+      );
+    }
+  }
+
+  PrayerTimes? _getCachedTodayPrayerTimes() {
+    final cachedJson = _storageService.get('cached_prayer_times');
+
+    if (cachedJson == null) return null;
+
+    try {
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+      final cached = PrayerTimes.fromJson(
+        Map<String, dynamic>.from(cachedJson),
+      );
+
+      if (cached.date == todayStr && cached.isValidChronologically()) {
+        return cached;
+      }
+
+      if (cached.isValidChronologically()) {
+        return cached.withDate(todayStr);
+      }
+
+      return null;
+    } catch (e) {
+      developer.log(
+        'Error parsing cached today prayer times: $e',
+        name: 'SettingsController',
+      );
+      return null;
+    }
+  }
+
+  PrayerTimes? _getCachedTomorrowPrayerTimes() {
+    final tomorrowJson = _storageService.get('cached_prayer_times_tomorrow');
+
+    if (tomorrowJson == null) return null;
+
+    try {
+      final tomorrowStr = DateFormat(
+        'yyyy-MM-dd',
+      ).format(DateTime.now().add(const Duration(days: 1)));
+
+      final cached = PrayerTimes.fromJson(
+        Map<String, dynamic>.from(tomorrowJson),
+      );
+
+      if (cached.date == tomorrowStr && cached.isValidChronologically()) {
+        return cached;
+      }
+
+      return null;
+    } catch (e) {
+      developer.log(
+        'Error parsing cached tomorrow prayer times: $e',
+        name: 'SettingsController',
+      );
+      return null;
+    }
+  }
+
+  // ── DISPOSE ────────────────────────────────────────────────────────────────
 
   @override
   void dispose() {
