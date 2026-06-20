@@ -88,12 +88,10 @@
             </intent-filter>
         </receiver>
 
-        <!-- Native Adhan exact alarm receiver -->
         <receiver
             android:name=".AdhanAlarmReceiver"
             android:exported="false" />
 
-        <!-- Native full Adhan foreground service -->
         <service
             android:name=".AdhanForegroundService"
             android:exported="false"

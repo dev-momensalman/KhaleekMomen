@@ -23,8 +23,6 @@ class SettingsController extends ChangeNotifier {
 
   Timer? _debounceTimer;
 
-  // ── Adhan Sound ───────────────────────────────────────────────────────────
-
   AdhanSoundOption _selectedAdhan = AdhanSoundOption.all.first;
   bool _isPreviewing = false;
   AdhanSoundOption? _previewedAdhan;
@@ -38,8 +36,6 @@ class SettingsController extends ChangeNotifier {
     _loadSettings();
     _listenToAudioState();
   }
-
-  // ── LISTEN TO AUDIO STATE ─────────────────────────────────────────────────
 
   void _listenToAudioState() {
     _audioSubscription = _audioService.stateStream.listen((state) {
@@ -64,8 +60,6 @@ class SettingsController extends ChangeNotifier {
     });
   }
 
-  // ── GETTERS ────────────────────────────────────────────────────────────────
-
   ThemeMode get themeMode => _themeMode;
 
   Locale get locale => _locale;
@@ -79,8 +73,6 @@ class SettingsController extends ChangeNotifier {
   bool get isPreviewing => _isPreviewing;
 
   AdhanSoundOption? get previewedAdhan => _previewedAdhan;
-
-  // ── LOAD SETTINGS ─────────────────────────────────────────────────────────
 
   void _loadSettings() {
     final themeStr = _storageService.getThemeMode();
@@ -109,8 +101,6 @@ class SettingsController extends ChangeNotifier {
     }
   }
 
-  // ── THEME / LANGUAGE ──────────────────────────────────────────────────────
-
   Future<void> updateThemeMode(ThemeMode mode) async {
     _themeMode = mode;
 
@@ -127,8 +117,6 @@ class SettingsController extends ChangeNotifier {
     await _storageService.setLanguage(langCode);
     notifyListeners();
   }
-
-  // ── ADHAN ENABLE / DISABLE ────────────────────────────────────────────────
 
   Future<void> updateAdhanAutoPlay(bool enabled) async {
     _adhanAutoPlay = enabled;
@@ -157,8 +145,6 @@ class SettingsController extends ChangeNotifier {
       }
     });
   }
-
-  // ── ADHAN SOUND METHODS ───────────────────────────────────────────────────
 
   Future<void> selectAdhan(AdhanSoundOption option) async {
     stopPreview();
@@ -199,8 +185,6 @@ class SettingsController extends ChangeNotifier {
   void stopPreview() {
     unawaited(_audioService.stop());
   }
-
-  // ── RESCHEDULE HELPERS ────────────────────────────────────────────────────
 
   Future<void> _rescheduleAdhanFromCache({required String reason}) async {
     final todayPrayerTimes = _getCachedTodayPrayerTimes();
@@ -289,8 +273,6 @@ class SettingsController extends ChangeNotifier {
       return null;
     }
   }
-
-  // ── DISPOSE ────────────────────────────────────────────────────────────────
 
   @override
   void dispose() {

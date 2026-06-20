@@ -3,14 +3,14 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz_data;
-import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
-import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 import 'package:islamic_audio_hub/core/services/storage_service.dart';
 import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
+import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
@@ -204,6 +204,7 @@ class NotificationService {
 
     try {
       await _nativeAdhanChannel.invokeMethod('cancelAdhanAlarms');
+
       developer.log(
         'Native Android Adhan alarms cancelled.',
         name: 'NotificationService',
@@ -272,7 +273,7 @@ class NotificationService {
         final match = tz.timeZoneDatabase.locations.values
             .cast<tz.Location?>()
             .firstWhere(
-              (l) => l?.currentTimeZone.offset == offsetMs,
+              (location) => location?.currentTimeZone.offset == offsetMs,
               orElse: () => null,
             );
 
@@ -288,6 +289,7 @@ class NotificationService {
     );
 
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
     final tomorrowStr = DateFormat(
       'yyyy-MM-dd',
     ).format(DateTime.now().add(const Duration(days: 1)));
@@ -713,7 +715,7 @@ class NotificationService {
     }
   }
 
-  // ── CANCEL IMMEDIATE ADHAN ───────────────────────────────────────────────
+  // ── CANCELS ───────────────────────────────────────────────────────────────
 
   static Future<void> cancelAdhanNotification() async {
     if (!_isInitialized) return;
@@ -744,8 +746,6 @@ class NotificationService {
       developer.log('cancelById($id) error: $e', name: 'NotificationService');
     }
   }
-
-  // ── CANCEL ALL ────────────────────────────────────────────────────────────
 
   static Future<void> cancelAllPrayerNotifications() async {
     try {

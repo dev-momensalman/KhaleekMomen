@@ -45,8 +45,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
   }
 
-  // ── PUBLIC API ─────────────────────────────────────────────────────────────
-
   Future<void> scheduleNextAdhan(
     PrayerTimes? prayerTimes, {
     PrayerTimes? tomorrowPrayerTimes,
@@ -141,8 +139,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // ── CACHE HELPERS ─────────────────────────────────────────────────────────
-
   PrayerTimes? _getCachedTodayPrayerTimes() {
     final cachedJson = _storageService.get('cached_prayer_times');
     if (cachedJson == null) return null;
@@ -202,8 +198,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  // ── IN-PROCESS TIMER ──────────────────────────────────────────────────────
-
   DateTime? _parseTimeOnDate(DateTime targetDate, String timeStr) {
     try {
       final timeParts = timeStr.split(':');
@@ -242,7 +236,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       _PrayerTimeEntry('Asr', _parseTimeOnDate(today, prayerTimes.asr)),
       _PrayerTimeEntry('Maghrib', _parseTimeOnDate(today, prayerTimes.maghrib)),
       _PrayerTimeEntry('Isha', _parseTimeOnDate(today, prayerTimes.isha)),
-
       _PrayerTimeEntry(
         'Fajr',
         _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.fajr),
@@ -269,11 +262,11 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     String? nextPrayerName;
 
     for (final entry in prayers) {
-      final t = entry.time;
+      final time = entry.time;
 
-      if (t != null && t.isAfter(now)) {
-        if (nextPrayerTime == null || t.isBefore(nextPrayerTime)) {
-          nextPrayerTime = t;
+      if (time != null && time.isAfter(now)) {
+        if (nextPrayerTime == null || time.isBefore(nextPrayerTime)) {
+          nextPrayerTime = time;
           nextPrayerName = entry.name;
         }
       }
@@ -302,8 +295,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     _prayerTimer = Timer(duration, () => _triggerAdhan(nextPrayerName!));
   }
 
-  // ── ADHAN TRIGGER ──────────────────────────────────────────────────────────
-
   Future<void> _triggerAdhan(String prayerName) async {
     final arabicName = _arabicNames[prayerName] ?? prayerName;
 
@@ -322,14 +313,10 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    // مهم جدًا:
-    // لو التطبيق مفتوح وقت الأذان، الـ Timer الداخلي هيشغل الأذان.
-    // وفي نفس اللحظة ممكن يكون فيه Native Alarm متجدول لنفس الصلاة.
-    // لذلك بنلغي كل إشعارات/منبهات الأذان المجدولة قبل تشغيل الصوت الداخلي،
-    // وبعد انتهاء الأذان بنعمل reschedule من الكاش.
     await NotificationService.cancelAllPrayerNotifications();
 
     final legacyNotifId = _legacyPrayerNotifIds[prayerName];
+
     if (legacyNotifId != null) {
       await NotificationService.cancelById(legacyNotifId);
     }
@@ -397,8 +384,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  // ── RESCHEDULE ─────────────────────────────────────────────────────────────
-
   void _rescheduleAfterFired() {
     developer.log(
       'AdhanScheduler: rescheduling after adhan.',
@@ -423,8 +408,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       ),
     );
   }
-
-  // ── TIMER CLEANUP ──────────────────────────────────────────────────────────
 
   void _cancelTimer() {
     _prayerTimer?.cancel();

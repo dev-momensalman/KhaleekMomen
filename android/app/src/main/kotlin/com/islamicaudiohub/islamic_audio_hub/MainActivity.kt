@@ -1,8 +1,5 @@
 package com.islamicaudiohub.islamic_audio_hub
 
-import android.content.Context
-import android.os.Build
-import android.provider.Settings
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.ryanheise.audioservice.AudioServiceActivity
@@ -20,8 +17,14 @@ class MainActivity : AudioServiceActivity() {
             when (call.method) {
                 "scheduleAdhanAlarms" -> {
                     try {
-                        val alarms = call.argument<List<Map<String, Any?>>>("alarms") ?: emptyList()
-                        NativeAdhanScheduler.scheduleAlarms(this, alarms)
+                        val alarms =
+                            call.argument<List<Map<String, Any?>>>("alarms") ?: emptyList()
+
+                        NativeAdhanScheduler.scheduleAlarms(
+                            this,
+                            alarms
+                        )
+
                         result.success(true)
                     } catch (e: Exception) {
                         result.error(
@@ -47,8 +50,10 @@ class MainActivity : AudioServiceActivity() {
 
                 "canScheduleExactAlarms" -> {
                     try {
-                        result.success(NativeAdhanScheduler.canScheduleExactAlarms(this))
-                    } catch (e: Exception) {
+                        result.success(
+                            NativeAdhanScheduler.canScheduleExactAlarms(this)
+                        )
+                    } catch (_: Exception) {
                         result.success(false)
                     }
                 }
@@ -68,8 +73,10 @@ class MainActivity : AudioServiceActivity() {
 
                 "isIgnoringBatteryOptimizations" -> {
                     try {
-                        result.success(NativeAdhanScheduler.isIgnoringBatteryOptimizations(this))
-                    } catch (e: Exception) {
+                        result.success(
+                            NativeAdhanScheduler.isIgnoringBatteryOptimizations(this)
+                        )
+                    } catch (_: Exception) {
                         result.success(false)
                     }
                 }

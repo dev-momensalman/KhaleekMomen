@@ -24,8 +24,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
   bool _isOfflineUsingCache = false;
   Timer? _dayChangeTimer;
 
-  // ── City Name ──────────────────────────────────────────────────────────────
-
   String? _cityName;
   double? _lastLat;
   double? _lastLng;
@@ -61,8 +59,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
   bool get isValid =>
       _todayTimes != null && _todayTimes!.isValidChronologically();
 
-  // ── INITIAL CACHE LOAD ─────────────────────────────────────────────────────
-
   void _loadCachedTimes() {
     final cache = _prayerService.getCachedPrayerTimes();
 
@@ -85,8 +81,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  // ── DAY CHANGE CHECK ───────────────────────────────────────────────────────
-
   void _startDayChangeTimer() {
     _dayChangeTimer?.cancel();
 
@@ -108,8 +102,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       unawaited(fetchPrayerTimes(force: true));
     }
   }
-
-  // ── APP LIFECYCLE ──────────────────────────────────────────────────────────
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -147,8 +139,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // ── FETCH PRAYER TIMES ─────────────────────────────────────────────────────
-
   Future<void> fetchPrayerTimes({bool force = false}) async {
     final hasValidCache = _prayerService.hasValidCacheForToday();
 
@@ -172,9 +162,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       _todayTimes = times;
       _errorMessage = null;
 
-      // مهم جدًا:
-      // لازم ننتظر أوقات صلاة بكرة قبل جدولة الأذان.
-      // لو عملنا unawaited هنا، فجر بكرة ممكن يتجدول بتوقيت النهارده.
       final tomorrowTimes = await _prayerService.getTomorrowPrayerTimes(
         latitude: position.latitude,
         longitude: position.longitude,
@@ -185,7 +172,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
         tomorrowPrayerTimes: tomorrowTimes,
       );
 
-      // Fetch city name using last known locale, or default Arabic.
       unawaited(
         _fetchCityName(
           position.latitude,
@@ -215,8 +201,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
     }
   }
-
-  // ── OFFLINE / FAILURE FALLBACK ─────────────────────────────────────────────
 
   void _handleOfflineOrFailedFetch() {
     final tomorrowCache = _prayerService.getCachedTomorrowPrayerTimes();
@@ -254,9 +238,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  // ── REFRESH CITY NAME WHEN LANGUAGE CHANGES ────────────────────────────────
-
-  /// Call this from the View whenever the app locale changes.
   void refreshCityNameForLocale(String locale) {
     if (locale == _lastLocale) return;
 
@@ -270,9 +251,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
 
     unawaited(_fetchCityName(_lastLat!, _lastLng!, locale: locale));
   }
-
-  // ── REVERSE GEOCODING ──────────────────────────────────────────────────────
-  // Nominatim — no API key required.
 
   Future<void> _fetchCityName(
     double lat,
