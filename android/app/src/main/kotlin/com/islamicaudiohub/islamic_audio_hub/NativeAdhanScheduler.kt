@@ -185,14 +185,53 @@ object NativeAdhanScheduler {
             }
         }
 
-        val stopIntent = Intent(context, AdhanForegroundService::class.java)
-        context.stopService(stopIntent)
+        stopAdhanService(context)
 
         if (clearStored) {
             clearStoredAlarms(context)
         }
 
         Log.d(TAG, "Cancelled all native adhan alarms. clearStored=$clearStored")
+    }
+
+    fun playTestAdhan(
+        context: Context,
+        resourceName: String,
+        prayerAr: String
+    ) {
+        val serviceIntent = Intent(context, AdhanForegroundService::class.java).apply {
+            action = AdhanForegroundService.ACTION_PLAY_ADHAN
+            putExtra(AdhanForegroundService.EXTRA_ID, 9999)
+            putExtra(AdhanForegroundService.EXTRA_PRAYER_EN, "Test")
+            putExtra(AdhanForegroundService.EXTRA_PRAYER_AR, prayerAr)
+            putExtra(AdhanForegroundService.EXTRA_RESOURCE_NAME, resourceName)
+            putExtra(AdhanForegroundService.EXTRA_TITLE, "اختبار الأذان — خليك مؤمن")
+            putExtra(
+                AdhanForegroundService.EXTRA_BODY,
+                "هذا اختبار لتشغيل الأذان الكامل من خدمة Android الأصلية"
+            )
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(serviceIntent)
+        } else {
+            context.startService(serviceIntent)
+        }
+    }
+
+    fun stopAdhanService(context: Context) {
+        val stopIntent = Intent(context, AdhanForegroundService::class.java).apply {
+            action = AdhanForegroundService.ACTION_STOP_ADHAN
+        }
+
+        try {
+            context.startService(stopIntent)
+        } catch (_: Exception) {
+            try {
+                context.stopService(Intent(context, AdhanForegroundService::class.java))
+            } catch (_: Exception) {
+            }
+        }
     }
 
     fun canScheduleExactAlarms(context: Context): Boolean {

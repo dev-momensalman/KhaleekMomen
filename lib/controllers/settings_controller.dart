@@ -20,13 +20,14 @@ class SettingsController extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   Locale _locale = const Locale('ar');
   bool _adhanAutoPlay = true;
+  bool _isTestingNativeAdhan = false;
 
   Timer? _debounceTimer;
 
   AdhanSoundOption _selectedAdhan = AdhanSoundOption.all.first;
   bool _isPreviewing = false;
   AdhanSoundOption? _previewedAdhan;
-  StreamSubscription<AudioState>? _audioSubscription;
+  StreamSubscription? _audioSubscription;
 
   SettingsController(
     this._storageService,
@@ -73,6 +74,8 @@ class SettingsController extends ChangeNotifier {
   bool get isPreviewing => _isPreviewing;
 
   AdhanSoundOption? get previewedAdhan => _previewedAdhan;
+
+  bool get isTestingNativeAdhan => _isTestingNativeAdhan;
 
   void _loadSettings() {
     final themeStr = _storageService.getThemeMode();
@@ -131,6 +134,7 @@ class SettingsController extends ChangeNotifier {
         await _rescheduleAdhanFromCache(reason: 'adhan autoplay enabled');
       } else {
         await NotificationService.cancelAllPrayerNotifications();
+        await NotificationService.stopNativeAdhan();
 
         stopPreview();
 
@@ -180,6 +184,53 @@ class SettingsController extends ChangeNotifier {
     } catch (e) {
       developer.log('Preview failed: $e', name: 'SettingsController');
     }
+  }
+
+  Future<void> testNativeAdhan() async {
+    if (_isTestingNativeAdhan) return;
+
+    _isTestingNativeAdhan = true;
+    notifyListeners();
+
+    try {
+      stopPreview();
+
+      if (_audioService.currentState.mode == AudioMode.adhan ||
+          _audioService.currentState.isPlaying) {
+        await _audioService.stop();
+      }
+
+      await NotificationService.playNativeTestAdhan(
+        rawResourceName: _selectedAdhan.rawResourceName,
+        prayerAr: 'اختبار الأذان',
+      );
+
+      developer.log(
+        'Native Adhan test started: ${_selectedAdhan.displayName}',
+        name: 'SettingsController',
+      );
+    } catch (e, st) {
+      developer.log(
+        'Native Adhan test failed: $e\n$st',
+        name: 'SettingsController',
+      );
+    } finally {
+      await Future.delayed(const Duration(seconds: 2));
+      _isTestingNativeAdhan = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> stopNativeAdhan() async {
+    await NotificationService.stopNativeAdhan();
+  }
+
+  Future<void> openExactAlarmSettings() async {
+    await NotificationService.openNativeExactAlarmSettings();
+  }
+
+  Future<void> openBatteryOptimizationSettings() async {
+    await NotificationService.openNativeBatteryOptimizationSettings();
   }
 
   void stopPreview() {

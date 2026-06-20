@@ -9,10 +9,11 @@ class AdhanBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
 
-        val shouldReschedule = action == Intent.ACTION_BOOT_COMPLETED ||
-            action == Intent.ACTION_MY_PACKAGE_REPLACED ||
-            action == Intent.ACTION_TIME_CHANGED ||
-            action == Intent.ACTION_TIMEZONE_CHANGED
+        val shouldReschedule =
+            action == Intent.ACTION_BOOT_COMPLETED ||
+                action == Intent.ACTION_MY_PACKAGE_REPLACED ||
+                action == Intent.ACTION_TIME_CHANGED ||
+                action == Intent.ACTION_TIMEZONE_CHANGED
 
         if (!shouldReschedule) return
 

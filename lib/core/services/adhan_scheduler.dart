@@ -1,7 +1,6 @@
-// lib/core/services/adhan_scheduler.dart
-
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
@@ -313,7 +312,19 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    await NotificationService.cancelAllPrayerNotifications();
+    if (Platform.isAndroid) {
+      developer.log(
+        'Android foreground timer fired. Native alarm/service is responsible for full adhan audio.',
+        name: 'AdhanScheduler',
+      );
+
+      _scheduledTime = null;
+      _scheduledPrayerName = null;
+
+      Future.delayed(const Duration(minutes: 2), _rescheduleAfterFired);
+      notifyListeners();
+      return;
+    }
 
     final legacyNotifId = _legacyPrayerNotifIds[prayerName];
 
@@ -354,11 +365,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         onComplete: () {
           unawaited(onComplete());
         },
-      );
-
-      developer.log(
-        'AdhanPlayer: playing "${selectedOption.displayName}"',
-        name: 'AdhanScheduler',
       );
     } catch (err) {
       developer.log(

@@ -102,6 +102,42 @@ class MainActivity : AudioServiceActivity() {
                     }
                 }
 
+                "playTestAdhan" -> {
+                    try {
+                        val resourceName =
+                            call.argument<String>("resourceName") ?: "adhan_makkah"
+                        val prayerAr =
+                            call.argument<String>("prayerAr") ?: "اختبار الأذان"
+
+                        NativeAdhanScheduler.playTestAdhan(
+                            this,
+                            resourceName,
+                            prayerAr
+                        )
+
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error(
+                            "PLAY_TEST_ADHAN_FAILED",
+                            e.message,
+                            null
+                        )
+                    }
+                }
+
+                "stopAdhan" -> {
+                    try {
+                        NativeAdhanScheduler.stopAdhanService(this)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error(
+                            "STOP_ADHAN_FAILED",
+                            e.message,
+                            null
+                        )
+                    }
+                }
+
                 else -> result.notImplemented()
             }
         }

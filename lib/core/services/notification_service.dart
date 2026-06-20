@@ -47,8 +47,6 @@ class NotificationService {
   static bool get initFailed => _initFailed;
   static bool get exactAlarmPermissionGranted => _exactAlarmPermissionGranted;
 
-  // ── INIT ──────────────────────────────────────────────────────────────────
-
   static Future<void> init() async {
     if (_isInitialized || _initFailed) return;
 
@@ -90,23 +88,16 @@ class NotificationService {
       final exactResult = await androidPlugin?.requestExactAlarmsPermission();
       _exactAlarmPermissionGranted = exactResult ?? false;
 
-      try {
-        if (Platform.isAndroid) {
-          final nativeCanSchedule = await canScheduleNativeExactAlarms();
-          _exactAlarmPermissionGranted =
-              _exactAlarmPermissionGranted || nativeCanSchedule;
-        }
-      } catch (_) {}
-
-      developer.log(
-        'Exact alarm permission: ${_exactAlarmPermissionGranted ? "GRANTED" : "DENIED"}',
-        name: 'NotificationService',
-      );
+      if (Platform.isAndroid) {
+        final nativeCanSchedule = await canScheduleNativeExactAlarms();
+        _exactAlarmPermissionGranted =
+            _exactAlarmPermissionGranted || nativeCanSchedule;
+      }
 
       _isInitialized = true;
 
       developer.log(
-        'NotificationService initialized.',
+        'NotificationService initialized. Exact alarm: $_exactAlarmPermissionGranted',
         name: 'NotificationService',
       );
     } catch (e, st) {
@@ -134,8 +125,6 @@ class NotificationService {
       name: 'NotificationService',
     );
   }
-
-  // ── NATIVE ANDROID HELPERS ────────────────────────────────────────────────
 
   static Future<bool> canScheduleNativeExactAlarms() async {
     if (!Platform.isAndroid) return true;
@@ -199,6 +188,43 @@ class NotificationService {
     }
   }
 
+  static Future<void> playNativeTestAdhan({
+    required String rawResourceName,
+    String prayerAr = 'اختبار الأذان',
+  }) async {
+    if (!Platform.isAndroid) return;
+
+    try {
+      await _nativeAdhanChannel.invokeMethod('playTestAdhan', {
+        'resourceName': rawResourceName,
+        'prayerAr': prayerAr,
+      });
+
+      developer.log(
+        'Native test adhan requested: $rawResourceName',
+        name: 'NotificationService',
+      );
+    } catch (e) {
+      developer.log(
+        'Native test adhan failed: $e',
+        name: 'NotificationService',
+      );
+    }
+  }
+
+  static Future<void> stopNativeAdhan() async {
+    if (!Platform.isAndroid) return;
+
+    try {
+      await _nativeAdhanChannel.invokeMethod('stopAdhan');
+    } catch (e) {
+      developer.log(
+        'Stop native adhan failed: $e',
+        name: 'NotificationService',
+      );
+    }
+  }
+
   static Future<void> _cancelNativeAdhanAlarms() async {
     if (!Platform.isAndroid) return;
 
@@ -221,18 +247,22 @@ class NotificationService {
     List<Map<String, dynamic>> alarms,
   ) async {
     if (!Platform.isAndroid) return false;
+    if (alarms.isEmpty) return false;
 
     try {
-      await _nativeAdhanChannel.invokeMethod('scheduleAdhanAlarms', {
-        'alarms': alarms,
-      });
+      final scheduledCount = await _nativeAdhanChannel.invokeMethod<int>(
+        'scheduleAdhanAlarms',
+        {'alarms': alarms},
+      );
+
+      final ok = (scheduledCount ?? 0) > 0;
 
       developer.log(
-        'Scheduled ${alarms.length} native Android full-Adhan alarm(s).',
+        'Native Android Adhan scheduling result: count=$scheduledCount / requested=${alarms.length}',
         name: 'NotificationService',
       );
 
-      return true;
+      return ok;
     } catch (e, st) {
       developer.log(
         'Native Android Adhan scheduling failed. Falling back to local notifications.\n$e\n$st',
@@ -242,8 +272,6 @@ class NotificationService {
       return false;
     }
   }
-
-  // ── SCHEDULE ──────────────────────────────────────────────────────────────
 
   static Future<void> schedulePrayerNotifications(
     PrayerTimes prayerTimes, {
@@ -267,29 +295,10 @@ class NotificationService {
     } catch (_) {
       try {
         tz.setLocalLocation(tz.getLocation('Africa/Cairo'));
-      } catch (_) {
-        final offsetMs = DateTime.now().timeZoneOffset.inMilliseconds;
-
-        final match = tz.timeZoneDatabase.locations.values
-            .cast<tz.Location?>()
-            .firstWhere(
-              (location) => location?.currentTimeZone.offset == offsetMs,
-              orElse: () => null,
-            );
-
-        if (match != null) {
-          tz.setLocalLocation(match);
-        }
-      }
+      } catch (_) {}
     }
 
-    developer.log(
-      'Timezone set to: ${tz.local.name}',
-      name: 'NotificationService',
-    );
-
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
     final tomorrowStr = DateFormat(
       'yyyy-MM-dd',
     ).format(DateTime.now().add(const Duration(days: 1)));
@@ -446,8 +455,6 @@ class NotificationService {
     };
   }
 
-  // ── FLUTTER LOCAL NOTIFICATIONS FALLBACK ────────────────────────────────
-
   static Future<void> _scheduleFlutterLocalNotificationsFallback(
     PrayerTimes effectiveTodayPrayerTimes, {
     required PrayerTimes? tomorrowPrayerTimes,
@@ -488,14 +495,6 @@ class NotificationService {
           await androidPlugin?.canScheduleExactNotifications() ?? false;
 
       _exactAlarmPermissionGranted = canSchedule;
-
-      if (!canSchedule) {
-        developer.log(
-          'WARNING: SCHEDULE_EXACT_ALARM permission not granted! '
-          'Notifications will use inexact timing.',
-          name: 'NotificationService',
-        );
-      }
     } catch (_) {}
 
     final prayers = [
@@ -532,11 +531,6 @@ class NotificationService {
 
     if (scheduled == 0 &&
         effectiveTomorrowPrayerTimes.isValidChronologically()) {
-      developer.log(
-        'All today\'s prayers have passed. Scheduling tomorrow\'s prayers.',
-        name: 'NotificationService',
-      );
-
       final tomorrowPrayers = [
         (_fajrNextId, 'الفجر', 'Fajr', effectiveTomorrowPrayerTimes.fajr),
         (_dhuhrNextId, 'الظهر', 'Dhuhr', effectiveTomorrowPrayerTimes.dhuhr),
@@ -550,8 +544,6 @@ class NotificationService {
         (_ishaNextId, 'العشاء', 'Isha', effectiveTomorrowPrayerTimes.isha),
       ];
 
-      int tomorrowScheduled = 0;
-
       for (final (id, arabic, english, timeStr) in tomorrowPrayers) {
         final prayerDt = effectiveTomorrowPrayerTimes.getDateTimeForPrayer(
           timeStr,
@@ -559,7 +551,7 @@ class NotificationService {
 
         if (prayerDt == null || !prayerDt.isAfter(now)) continue;
 
-        final success = await _scheduleOne(
+        await _scheduleOne(
           id: id,
           arabic: arabic,
           english: english,
@@ -568,25 +560,9 @@ class NotificationService {
           channelName: channelName,
           rawResourceName: rawResourceName,
         );
-
-        if (success) tomorrowScheduled++;
       }
-
-      developer.log(
-        'Scheduled $tomorrowScheduled tomorrow prayer notification(s) '
-        'for $tomorrowStr.',
-        name: 'NotificationService',
-      );
-    } else {
-      developer.log(
-        'Scheduled $scheduled prayer notification(s) for ${effectiveTodayPrayerTimes.date} '
-        '(tz: ${tz.local.name}, sound: $rawResourceName).',
-        name: 'NotificationService',
-      );
     }
   }
-
-  // ── SCHEDULE ONE ──────────────────────────────────────────────────────────
 
   static Future<bool> _scheduleOne({
     required int id,
@@ -638,12 +614,6 @@ class NotificationService {
         payload: english,
       );
 
-      developer.log(
-        'Scheduled: $english at $scheduledTime '
-        '(TZ: ${tzTime.location.name}, mode: ${scheduleMode.name}, sound: $rawResourceName)',
-        name: 'NotificationService',
-      );
-
       return true;
     } catch (e) {
       developer.log(
@@ -654,8 +624,6 @@ class NotificationService {
       return false;
     }
   }
-
-  // ── IMMEDIATE ADHAN NOTIFICATION ─────────────────────────────────────────
 
   static Future<void> showImmediateAdhanNotification(String arabicName) async {
     if (!_isInitialized) return;
@@ -702,11 +670,6 @@ class NotificationService {
           ),
         ),
       );
-
-      developer.log(
-        'Immediate adhan notification shown for: $arabicName',
-        name: 'NotificationService',
-      );
     } catch (e) {
       developer.log(
         'Failed to show immediate notification: $e',
@@ -715,18 +678,11 @@ class NotificationService {
     }
   }
 
-  // ── CANCELS ───────────────────────────────────────────────────────────────
-
   static Future<void> cancelAdhanNotification() async {
     if (!_isInitialized) return;
 
     try {
       await _plugin.cancel(200);
-
-      developer.log(
-        'Adhan notification (ID 200) cancelled.',
-        name: 'NotificationService',
-      );
     } catch (e) {
       developer.log(
         'cancelAdhanNotification error: $e',
@@ -740,8 +696,6 @@ class NotificationService {
 
     try {
       await _plugin.cancel(id);
-
-      developer.log('Notification $id cancelled.', name: 'NotificationService');
     } catch (e) {
       developer.log('cancelById($id) error: $e', name: 'NotificationService');
     }
@@ -778,8 +732,6 @@ class NotificationService {
       );
     }
   }
-
-  // ── BATTERY OPTIMIZATION ──────────────────────────────────────────────────
 
   static Future<void> checkAndRequestBatteryOptimization() async {
     if (!_isInitialized) return;

@@ -1,12 +1,17 @@
 // lib/views/settings_view.dart
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:islamic_audio_hub/l10n/app_localizations.dart';
+
 import 'package:islamic_audio_hub/controllers/settings_controller.dart';
+import 'package:islamic_audio_hub/core/services/notification_service.dart';
 import 'package:islamic_audio_hub/core/theme/app_theme.dart';
+import 'package:islamic_audio_hub/l10n/app_localizations.dart';
 
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key});
@@ -24,15 +29,51 @@ class SettingsView extends StatelessWidget {
         // ── 1. تنبيهات ──────────────────────────────────────────────
         _sectionHeader(context, l10n.audioScheduling),
         Card(
-          child: SwitchListTile(
-            value: ctrl.adhanAutoPlay,
-            title: Text(l10n.adhanAutoplay),
-            subtitle: Text(l10n.adhanAutoplaySubtitle),
-            secondary: Icon(
-              Icons.notifications_active_rounded,
-              color: ctrl.adhanAutoPlay ? theme.colorScheme.primary : null,
-            ),
-            onChanged: ctrl.updateAdhanAutoPlay,
+          child: Column(
+            children: [
+              SwitchListTile(
+                value: ctrl.adhanAutoPlay,
+                title: Text(l10n.adhanAutoplay),
+                subtitle: Text(l10n.adhanAutoplaySubtitle),
+                secondary: Icon(
+                  Icons.notifications_active_rounded,
+                  color: ctrl.adhanAutoPlay ? theme.colorScheme.primary : null,
+                ),
+                onChanged: ctrl.updateAdhanAutoPlay,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.verified_user_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  _t(
+                    isArabic,
+                    ar: 'فحص موثوقية الأذان',
+                    en: 'Adhan reliability check',
+                  ),
+                ),
+                subtitle: Text(
+                  _t(
+                    isArabic,
+                    ar: 'تأكد من الإشعارات والتنبيهات الدقيقة والبطارية واختبر الأذان.',
+                    en: 'Check notifications, exact alarms, battery settings, and test Adhan.',
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => _showAdhanDiagnosticsSheet(context, ctrl),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 24),
@@ -152,6 +193,10 @@ class SettingsView extends StatelessWidget {
     );
   }
 
+  static String _t(bool isArabic, {required String ar, required String en}) {
+    return isArabic ? ar : en;
+  }
+
   void _showAdhanSheet(BuildContext context, SettingsController ctrl) {
     showModalBottomSheet(
       context: context,
@@ -167,10 +212,28 @@ class SettingsView extends StatelessWidget {
     );
   }
 
+  void _showAdhanDiagnosticsSheet(
+    BuildContext context,
+    SettingsController ctrl,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => ChangeNotifierProvider.value(
+        value: ctrl,
+        child: const _AdhanDiagnosticsSheet(),
+      ),
+    );
+  }
+
   Widget _sectionHeader(BuildContext context, String title) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(left: 8, bottom: 8),
+      padding: const EdgeInsets.only(left: 8, bottom: 8, right: 8),
       child: Text(
         title.toUpperCase(),
         style: theme.textTheme.labelMedium
@@ -193,6 +256,510 @@ class SettingsView extends StatelessWidget {
       case ThemeMode.system:
         return l10n.themeSystem;
     }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Adhan Diagnostics Bottom Sheet
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _AdhanDiagnosticsSheet extends StatefulWidget {
+  const _AdhanDiagnosticsSheet();
+
+  @override
+  State<_AdhanDiagnosticsSheet> createState() => _AdhanDiagnosticsSheetState();
+}
+
+class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
+  bool _loading = true;
+  PermissionStatus? _notificationStatus;
+  bool? _canScheduleExactAlarms;
+  bool? _batteryOptimizationIgnored;
+
+  bool get _isArabic {
+    final ctrl = Provider.of<SettingsController>(context, listen: false);
+    return ctrl.locale.languageCode == 'ar';
+  }
+
+  String _t({required String ar, required String en}) {
+    return _isArabic ? ar : en;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStatus();
+  }
+
+  Future<void> _refreshStatus() async {
+    setState(() => _loading = true);
+
+    PermissionStatus? notificationStatus;
+    bool? canScheduleExactAlarms;
+    bool? batteryOptimizationIgnored;
+
+    try {
+      notificationStatus = await Permission.notification.status;
+    } catch (_) {
+      notificationStatus = null;
+    }
+
+    try {
+      canScheduleExactAlarms = Platform.isAndroid
+          ? await NotificationService.canScheduleNativeExactAlarms()
+          : true;
+    } catch (_) {
+      canScheduleExactAlarms = false;
+    }
+
+    try {
+      batteryOptimizationIgnored = Platform.isAndroid
+          ? await NotificationService.isIgnoringBatteryOptimizationsNative()
+          : true;
+    } catch (_) {
+      batteryOptimizationIgnored = false;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _notificationStatus = notificationStatus;
+      _canScheduleExactAlarms = canScheduleExactAlarms;
+      _batteryOptimizationIgnored = batteryOptimizationIgnored;
+      _loading = false;
+    });
+  }
+
+  Future<void> _requestNotifications() async {
+    await Permission.notification.request();
+    await _refreshStatus();
+  }
+
+  Future<void> _openExactAlarmSettings(SettingsController ctrl) async {
+    await ctrl.openExactAlarmSettings();
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _t(
+            ar: 'ارجع للتطبيق بعد تفعيل التنبيهات الدقيقة ثم اضغط تحديث الحالة.',
+            en: 'Return to the app after enabling precise alarms, then tap refresh.',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openBatterySettings(SettingsController ctrl) async {
+    await ctrl.openBatteryOptimizationSettings();
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _t(
+            ar: 'ارجع للتطبيق بعد إلغاء قيود البطارية ثم اضغط تحديث الحالة.',
+            en: 'Return to the app after disabling battery restrictions, then tap refresh.',
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ctrl = Provider.of<SettingsController>(context);
+    final isArabic = ctrl.locale.languageCode == 'ar';
+
+    final notificationOk = _notificationStatus?.isGranted ?? false;
+    final exactOk = _canScheduleExactAlarms ?? false;
+    final batteryOk = _batteryOptimizationIgnored ?? false;
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.72,
+      minChildSize: 0.48,
+      maxChildSize: 0.94,
+      builder: (_, scrollCtrl) {
+        return Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.verified_user_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _t(
+                        ar: 'فحص موثوقية الأذان',
+                        en: 'Adhan reliability check',
+                      ),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView(
+                      controller: scrollCtrl,
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        _InfoCard(
+                          title: _t(
+                            ar: 'قبل الاعتماد على الأذان',
+                            en: 'Before relying on Adhan',
+                          ),
+                          body: _t(
+                            ar: 'تأكد من تفعيل الثلاث نقاط التالية، ثم جرّب زر اختبار الأذان. بعض أجهزة Android قد تؤخر الأذان إذا كانت قيود البطارية مفعلة.',
+                            en: 'Make sure the following checks are enabled, then use the Adhan test button. Some Android devices may delay Adhan if battery restrictions are enabled.',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Card(
+                          child: Column(
+                            children: [
+                              _StatusTile(
+                                icon: Icons.notifications_active_rounded,
+                                title: _t(
+                                  ar: 'إشعارات الصلاة',
+                                  en: 'Prayer notifications',
+                                ),
+                                subtitle: notificationOk
+                                    ? _t(
+                                        ar: 'الإشعارات مفعّلة.',
+                                        en: 'Notifications are enabled.',
+                                      )
+                                    : _t(
+                                        ar: 'الإشعارات غير مفعّلة. يجب السماح بها حتى يظهر تنبيه وقت الصلاة.',
+                                        en: 'Notifications are not enabled. Allow them to receive prayer alerts.',
+                                      ),
+                                ok: notificationOk,
+                                actionLabel: notificationOk
+                                    ? null
+                                    : _t(ar: 'تفعيل', en: 'Enable'),
+                                onAction: notificationOk
+                                    ? null
+                                    : _requestNotifications,
+                              ),
+                              const Divider(height: 1),
+                              _StatusTile(
+                                icon: Icons.alarm_on_rounded,
+                                title: _t(
+                                  ar: 'التنبيهات الدقيقة',
+                                  en: 'Precise alarms',
+                                ),
+                                subtitle: exactOk
+                                    ? _t(
+                                        ar: 'التنبيهات الدقيقة مفعّلة. هذا يساعد على تشغيل الأذان في وقته.',
+                                        en: 'Precise alarms are enabled. This helps Adhan fire on time.',
+                                      )
+                                    : _t(
+                                        ar: 'التنبيهات الدقيقة غير مفعّلة. قد يتأخر الأذان بدونها.',
+                                        en: 'Precise alarms are disabled. Adhan may be delayed without them.',
+                                      ),
+                                ok: exactOk,
+                                actionLabel: exactOk
+                                    ? null
+                                    : _t(
+                                        ar: 'فتح الإعدادات',
+                                        en: 'Open settings',
+                                      ),
+                                onAction: exactOk
+                                    ? null
+                                    : () => _openExactAlarmSettings(ctrl),
+                              ),
+                              const Divider(height: 1),
+                              _StatusTile(
+                                icon: Icons.battery_saver_rounded,
+                                title: _t(
+                                  ar: 'قيود البطارية',
+                                  en: 'Battery restrictions',
+                                ),
+                                subtitle: batteryOk
+                                    ? _t(
+                                        ar: 'التطبيق مستثنى من قيود البطارية.',
+                                        en: 'The app is allowed to run without battery restrictions.',
+                                      )
+                                    : _t(
+                                        ar: 'قد تمنع قيود البطارية تشغيل الأذان في الخلفية، خاصة أثناء الليل.',
+                                        en: 'Battery restrictions may delay background Adhan, especially overnight.',
+                                      ),
+                                ok: batteryOk,
+                                actionLabel: batteryOk
+                                    ? null
+                                    : _t(
+                                        ar: 'فتح الإعدادات',
+                                        en: 'Open settings',
+                                      ),
+                                onAction: batteryOk
+                                    ? null
+                                    : () => _openBatterySettings(ctrl),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Card(
+                          child: Column(
+                            children: [
+                              ListTile(
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    Icons.volume_up_rounded,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                                title: Text(
+                                  _t(
+                                    ar: 'اختبار الأذان الكامل',
+                                    en: 'Test full Adhan',
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  _t(
+                                    ar: 'يشغّل الأذان بنفس مسار Android الأصلي المستخدم وقت الصلاة.',
+                                    en: 'Plays Adhan using the same native Android path used at prayer time.',
+                                  ),
+                                ),
+                                trailing: ctrl.isTestingNativeAdhan
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.play_circle_fill_rounded,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                onTap: ctrl.isTestingNativeAdhan
+                                    ? null
+                                    : () async {
+                                        await ctrl.testNativeAdhan();
+
+                                        if (!context.mounted) return;
+
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              _t(
+                                                ar: 'تم تشغيل اختبار الأذان.',
+                                                en: 'Adhan test started.',
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                              ),
+                              const Divider(height: 1),
+                              ListTile(
+                                leading: Icon(
+                                  Icons.stop_circle_rounded,
+                                  color: theme.colorScheme.error,
+                                ),
+                                title: Text(
+                                  _t(
+                                    ar: 'إيقاف اختبار الأذان',
+                                    en: 'Stop Adhan test',
+                                  ),
+                                ),
+                                onTap: () async {
+                                  await ctrl.stopNativeAdhan();
+
+                                  if (!context.mounted) return;
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        _t(
+                                          ar: 'تم إرسال أمر إيقاف الأذان.',
+                                          en: 'Stop command sent.',
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _refreshStatus,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: Text(
+                            _t(ar: 'تحديث الحالة', en: 'Refresh status'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _t(
+                            ar: 'ملاحظة: وضع عدم الإزعاج أو كتم صوت الهاتف قد يمنع سماع الأذان حتى لو كانت الإعدادات هنا صحيحة.',
+                            en: 'Note: Do Not Disturb or muted device volume may prevent hearing Adhan even when these checks are correct.',
+                          ),
+                          textAlign: isArabic
+                              ? TextAlign.right
+                              : TextAlign.left,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  final String title;
+  final String body;
+
+  const _InfoCard({required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, color: theme.colorScheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool ok;
+  final String? actionLabel;
+  final Future<void> Function()? onAction;
+
+  const _StatusTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.ok,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = ok ? const Color(0xFF2E7D32) : theme.colorScheme.error;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: color),
+      ),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Icon(
+            ok ? Icons.check_circle_rounded : Icons.error_rounded,
+            color: color,
+            size: 20,
+          ),
+        ],
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 3),
+        child: Text(subtitle),
+      ),
+      trailing: actionLabel == null
+          ? null
+          : TextButton(onPressed: onAction, child: Text(actionLabel!)),
+    );
   }
 }
 
@@ -222,6 +789,7 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final ctrl = Provider.of<SettingsController>(context);
+    final isArabic = ctrl.locale.languageCode == 'ar';
 
     final filtered = ctrl.availableAdhans
         .where((o) => o.displayName.contains(_query))
@@ -277,10 +845,12 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
             child: TextField(
               controller: _searchCtrl,
               onChanged: (v) => setState(() => _query = v),
-              textDirection: TextDirection.rtl,
+              textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
               decoration: InputDecoration(
                 hintText: l10n.searchReciter,
-                hintTextDirection: TextDirection.rtl,
+                hintTextDirection: isArabic
+                    ? TextDirection.rtl
+                    : TextDirection.ltr,
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: _query.isNotEmpty
                     ? IconButton(
@@ -528,7 +1098,6 @@ class _DevCard extends StatelessWidget {
                           icon: Icons.email_rounded,
                         ),
                         const Spacer(),
-                        // ✅ FIX: l10n.connect بدل isArabic ternary
                         Text(
                           l10n.connect,
                           style: theme.textTheme.labelSmall?.copyWith(

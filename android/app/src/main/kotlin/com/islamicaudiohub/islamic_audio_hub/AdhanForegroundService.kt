@@ -30,7 +30,7 @@ class AdhanForegroundService : Service() {
         const val EXTRA_BODY = "body"
 
         private const val TAG = "AdhanForegroundService"
-        private const val CHANNEL_ID = "native_adhan_foreground_channel_v2"
+        private const val CHANNEL_ID = "native_adhan_foreground_channel_v3"
         private const val NOTIFICATION_ID = 9200
     }
 
@@ -90,7 +90,6 @@ class AdhanForegroundService : Service() {
             }
 
             val afd = resources.openRawResourceFd(resId)
-
             val player = MediaPlayer()
 
             try {
@@ -131,9 +130,7 @@ class AdhanForegroundService : Service() {
             }
 
             player.prepare()
-
             mediaPlayer = player
-
             player.start()
 
             Log.d(TAG, "Native full adhan started: $resourceName")
@@ -281,7 +278,6 @@ class AdhanForegroundService : Service() {
         }
 
         stopSelf()
-
         Log.d(TAG, "Native adhan stopped.")
     }
 
