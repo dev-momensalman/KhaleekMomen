@@ -9,9 +9,11 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 
@@ -28,7 +30,7 @@ class AdhanForegroundService : Service() {
         const val EXTRA_BODY = "body"
 
         private const val TAG = "AdhanForegroundService"
-        private const val CHANNEL_ID = "native_adhan_foreground_channel"
+        private const val CHANNEL_ID = "native_adhan_foreground_channel_v2"
         private const val NOTIFICATION_ID = 9200
     }
 
@@ -87,14 +89,13 @@ class AdhanForegroundService : Service() {
                 return
             }
 
-            mediaPlayer = MediaPlayer.create(this, resId).apply {
-                setWakeMode(
-                    applicationContext,
-                    PowerManager.PARTIAL_WAKE_LOCK
-                )
+            val afd = resources.openRawResourceFd(resId)
 
+            val player = MediaPlayer()
+
+            try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    setAudioAttributes(
+                    player.setAudioAttributes(
                         AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_ALARM)
                             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -102,18 +103,38 @@ class AdhanForegroundService : Service() {
                     )
                 }
 
-                setOnCompletionListener {
-                    stopAdhan()
-                }
+                player.setWakeMode(
+                    applicationContext,
+                    PowerManager.PARTIAL_WAKE_LOCK
+                )
 
-                setOnErrorListener { _, what, extra ->
-                    Log.e(TAG, "MediaPlayer error what=$what extra=$extra")
-                    stopAdhan()
-                    true
+                player.setDataSource(
+                    afd.fileDescriptor,
+                    afd.startOffset,
+                    afd.length
+                )
+            } finally {
+                try {
+                    afd.close()
+                } catch (_: Exception) {
                 }
-
-                start()
             }
+
+            player.setOnCompletionListener {
+                stopAdhan()
+            }
+
+            player.setOnErrorListener { _, what, extra ->
+                Log.e(TAG, "MediaPlayer error what=$what extra=$extra")
+                stopAdhan()
+                true
+            }
+
+            player.prepare()
+
+            mediaPlayer = player
+
+            player.start()
 
             Log.d(TAG, "Native full adhan started: $resourceName")
         } catch (e: Exception) {
@@ -138,7 +159,13 @@ class AdhanForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
 
-        val openIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val openIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        } ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:$packageName")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+
         val openPendingIntent = PendingIntent.getActivity(
             this,
             9992,
@@ -195,6 +222,7 @@ class AdhanForegroundService : Service() {
             if (wakeLock?.isHeld == true) return
 
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "KhaleekMomen:AdhanWakeLock"
@@ -212,6 +240,7 @@ class AdhanForegroundService : Service() {
             if (wakeLock?.isHeld == true) {
                 wakeLock?.release()
             }
+
             wakeLock = null
         } catch (e: Exception) {
             Log.e(TAG, "WakeLock release failed.", e)
@@ -237,13 +266,22 @@ class AdhanForegroundService : Service() {
         releaseWakeLock()
 
         try {
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
         } catch (_: Exception) {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
+            try {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            } catch (_: Exception) {
+            }
         }
 
         stopSelf()
+
         Log.d(TAG, "Native adhan stopped.")
     }
 

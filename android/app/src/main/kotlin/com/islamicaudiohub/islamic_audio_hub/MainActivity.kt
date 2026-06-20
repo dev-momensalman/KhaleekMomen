@@ -1,8 +1,8 @@
 package com.islamicaudiohub.islamic_audio_hub
 
+import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import com.ryanheise.audioservice.AudioServiceActivity
 
 class MainActivity : AudioServiceActivity() {
     private val channelName = "khaleek_momen/adhan_alarm"
@@ -20,12 +20,20 @@ class MainActivity : AudioServiceActivity() {
                         val alarms =
                             call.argument<List<Map<String, Any?>>>("alarms") ?: emptyList()
 
-                        NativeAdhanScheduler.scheduleAlarms(
+                        val scheduledCount = NativeAdhanScheduler.scheduleAlarms(
                             this,
                             alarms
                         )
 
-                        result.success(true)
+                        if (alarms.isNotEmpty() && scheduledCount <= 0) {
+                            result.error(
+                                "NO_ADHAN_ALARMS_SCHEDULED",
+                                "Native scheduler received ${alarms.size} alarm(s), but scheduled 0.",
+                                null
+                            )
+                        } else {
+                            result.success(scheduledCount)
+                        }
                     } catch (e: Exception) {
                         result.error(
                             "SCHEDULE_ADHAN_ALARMS_FAILED",
