@@ -122,6 +122,7 @@ object NativeAdhanScheduler {
                     }
                 } else {
                     val showIntent = buildOpenAppPendingIntent(context, id)
+
                     val alarmClockInfo = AlarmManager.AlarmClockInfo(
                         triggerAtMillis,
                         showIntent
@@ -151,7 +152,10 @@ object NativeAdhanScheduler {
         cancelAll(context, clearStored = true)
     }
 
-    private fun cancelAll(context: Context, clearStored: Boolean) {
+    private fun cancelAll(
+        context: Context,
+        clearStored: Boolean
+    ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         for (id in REQUEST_BASE until REQUEST_BASE + REQUEST_LIMIT) {
