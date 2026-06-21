@@ -1,11 +1,17 @@
 package com.islamicaudiohub.islamic_audio_hub
 
+import android.os.Handler
+import android.os.Looper
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.Executors
 
 class MainActivity : AudioServiceActivity() {
     private val channelName = "khaleek_momen/adhan_alarm"
+
+    private val nativeExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -16,50 +22,63 @@ class MainActivity : AudioServiceActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "scheduleAdhanAlarms" -> {
-                    try {
-                        val alarms =
-                            call.argument<List<Map<String, Any?>>>("alarms") ?: emptyList()
+                    val alarms =
+                        call.argument<List<Map<String, Any?>>>("alarms") ?: emptyList()
 
-                        val scheduledCount = NativeAdhanScheduler.scheduleAlarms(
-                            this,
-                            alarms
-                        )
-
-                        if (alarms.isNotEmpty() && scheduledCount <= 0) {
-                            result.error(
-                                "NO_ADHAN_ALARMS_SCHEDULED",
-                                "Native scheduler received ${alarms.size} alarm(s), but scheduled 0.",
-                                null
+                    nativeExecutor.execute {
+                        try {
+                            val scheduledCount = NativeAdhanScheduler.scheduleAlarms(
+                                applicationContext,
+                                alarms
                             )
-                        } else {
-                            result.success(scheduledCount)
+
+                            mainHandler.post {
+                                if (alarms.isNotEmpty() && scheduledCount <= 0) {
+                                    result.error(
+                                        "NO_ADHAN_ALARMS_SCHEDULED",
+                                        "Native scheduler received ${alarms.size} alarm(s), but scheduled 0.",
+                                        null
+                                    )
+                                } else {
+                                    result.success(scheduledCount)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            mainHandler.post {
+                                result.error(
+                                    "SCHEDULE_ADHAN_ALARMS_FAILED",
+                                    e.message,
+                                    null
+                                )
+                            }
                         }
-                    } catch (e: Exception) {
-                        result.error(
-                            "SCHEDULE_ADHAN_ALARMS_FAILED",
-                            e.message,
-                            null
-                        )
                     }
                 }
 
                 "cancelAdhanAlarms" -> {
-                    try {
-                        NativeAdhanScheduler.cancelAll(this)
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error(
-                            "CANCEL_ADHAN_ALARMS_FAILED",
-                            e.message,
-                            null
-                        )
+                    nativeExecutor.execute {
+                        try {
+                            NativeAdhanScheduler.cancelAll(applicationContext)
+
+                            mainHandler.post {
+                                result.success(true)
+                            }
+                        } catch (e: Exception) {
+                            mainHandler.post {
+                                result.error(
+                                    "CANCEL_ADHAN_ALARMS_FAILED",
+                                    e.message,
+                                    null
+                                )
+                            }
+                        }
                     }
                 }
 
                 "canScheduleExactAlarms" -> {
                     try {
                         result.success(
-                            NativeAdhanScheduler.canScheduleExactAlarms(this)
+                            NativeAdhanScheduler.canScheduleExactAlarms(applicationContext)
                         )
                     } catch (_: Exception) {
                         result.success(false)
@@ -68,7 +87,7 @@ class MainActivity : AudioServiceActivity() {
 
                 "openExactAlarmSettings" -> {
                     try {
-                        NativeAdhanScheduler.openExactAlarmSettings(this)
+                        NativeAdhanScheduler.openExactAlarmSettings(applicationContext)
                         result.success(true)
                     } catch (e: Exception) {
                         result.error(
@@ -82,7 +101,9 @@ class MainActivity : AudioServiceActivity() {
                 "isIgnoringBatteryOptimizations" -> {
                     try {
                         result.success(
-                            NativeAdhanScheduler.isIgnoringBatteryOptimizations(this)
+                            NativeAdhanScheduler.isIgnoringBatteryOptimizations(
+                                applicationContext
+                            )
                         )
                     } catch (_: Exception) {
                         result.success(false)
@@ -91,7 +112,9 @@ class MainActivity : AudioServiceActivity() {
 
                 "openBatteryOptimizationSettings" -> {
                     try {
-                        NativeAdhanScheduler.openBatteryOptimizationSettings(this)
+                        NativeAdhanScheduler.openBatteryOptimizationSettings(
+                            applicationContext
+                        )
                         result.success(true)
                     } catch (e: Exception) {
                         result.error(
@@ -110,7 +133,7 @@ class MainActivity : AudioServiceActivity() {
                             call.argument<String>("prayerAr") ?: "اختبار الأذان"
 
                         NativeAdhanScheduler.playTestAdhan(
-                            this,
+                            applicationContext,
                             resourceName,
                             prayerAr
                         )
@@ -127,7 +150,7 @@ class MainActivity : AudioServiceActivity() {
 
                 "stopAdhan" -> {
                     try {
-                        NativeAdhanScheduler.stopAdhanService(this)
+                        NativeAdhanScheduler.stopAdhanService(applicationContext)
                         result.success(true)
                     } catch (e: Exception) {
                         result.error(
@@ -141,5 +164,14 @@ class MainActivity : AudioServiceActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    override fun onDestroy() {
+        try {
+            nativeExecutor.shutdown()
+        } catch (_: Exception) {
+        }
+
+        super.onDestroy()
     }
 }

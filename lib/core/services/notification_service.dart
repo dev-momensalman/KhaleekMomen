@@ -273,7 +273,7 @@ class NotificationService {
     }
   }
 
-  static Future<void> schedulePrayerNotifications(
+  static Future schedulePrayerNotifications(
     PrayerTimes prayerTimes, {
     required StorageService storage,
     PrayerTimes? tomorrowPrayerTimes,
@@ -309,13 +309,13 @@ class NotificationService {
 
     if (!effectiveTodayPrayerTimes.isValidChronologically()) {
       developer.log(
-        'Invalid prayer times — skipping.',
+        'Invalid prayer times — cancelling existing schedules.',
         name: 'NotificationService',
       );
+
+      await cancelAllPrayerNotifications();
       return;
     }
-
-    await cancelAllPrayerNotifications();
 
     final savedSound = storage.getSelectedAdhanSound();
 
@@ -332,13 +332,23 @@ class NotificationService {
       rawResourceName: rawResourceName,
     );
 
+    // مهم جدًا:
+    // على Android لا نلغي الأذانات قبل الجدولة.
+    // NativeAdhanScheduler هو المسؤول عن المقارنة وإعادة الجدولة عند الحاجة فقط.
     if (Platform.isAndroid && nativeAlarms.isNotEmpty) {
       final nativeScheduled = await _scheduleNativeAdhanAlarms(nativeAlarms);
 
       if (nativeScheduled) {
+        developer.log(
+          'Native Android Adhan schedule handled without pre-cancel.',
+          name: 'NotificationService',
+        );
         return;
       }
     }
+
+    // لو Native فشل فقط، نلغي القديم ونستخدم fallback.
+    await cancelAllPrayerNotifications();
 
     await _scheduleFlutterLocalNotificationsFallback(
       effectiveTodayPrayerTimes,

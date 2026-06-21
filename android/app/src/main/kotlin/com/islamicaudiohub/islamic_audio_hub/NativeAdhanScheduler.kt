@@ -20,6 +20,7 @@ object NativeAdhanScheduler {
 
     private const val PREFS_NAME = "khaleek_momen_native_adhan"
     private const val PREF_ALARMS = "scheduled_adhan_alarms"
+    private const val PREF_SIGNATURE = "scheduled_adhan_signature"
 
     private const val EXTRA_ID = "id"
     private const val EXTRA_PRAYER_EN = "prayer_en"
@@ -32,35 +33,66 @@ object NativeAdhanScheduler {
         context: Context,
         alarms: List<Map<String, Any?>>
     ): Int {
-        val futureAlarms = sanitizeFutureAlarms(alarms)
-
-        persistAlarms(context, futureAlarms)
-
-        cancelAll(context, clearStored = false)
-
-        val scheduledCount = scheduleInternal(context, futureAlarms)
-
-        Log.d(
-            TAG,
-            "scheduleAlarms: received=${alarms.size}, future=${futureAlarms.size}, scheduled=$scheduledCount"
+        return scheduleAlarmsInternal(
+            context = context.applicationContext,
+            alarms = alarms,
+            forceReschedule = false,
+            source = "scheduleAlarms"
         )
-
-        return scheduledCount
     }
 
     fun scheduleStoredAlarms(context: Context): Int {
-        val storedAlarms = loadStoredAlarms(context)
-        val futureAlarms = sanitizeFutureAlarms(storedAlarms)
+        val appContext = context.applicationContext
+        val storedAlarms = loadStoredAlarms(appContext)
 
-        persistAlarms(context, futureAlarms)
+        return scheduleAlarmsInternal(
+            context = appContext,
+            alarms = storedAlarms,
+            forceReschedule = true,
+            source = "scheduleStoredAlarms"
+        )
+    }
 
-        cancelAll(context, clearStored = false)
+    private fun scheduleAlarmsInternal(
+        context: Context,
+        alarms: List<Map<String, Any?>>,
+        forceReschedule: Boolean,
+        source: String
+    ): Int {
+        val futureAlarms = sanitizeFutureAlarms(alarms)
+        val exactAllowed = canScheduleExactAlarms(context)
+        val signature = buildAlarmsSignature(futureAlarms, exactAllowed)
 
-        val scheduledCount = scheduleInternal(context, futureAlarms)
+        if (!forceReschedule && futureAlarms.isNotEmpty()) {
+            val previousSignature = loadStoredSignature(context)
+
+            if (previousSignature == signature) {
+                Log.d(
+                    TAG,
+                    "$source skipped: same native adhan alarm signature. count=${futureAlarms.size}"
+                )
+
+                return futureAlarms.size
+            }
+        }
+
+        persistAlarms(
+            context = context,
+            alarms = futureAlarms,
+            signature = signature
+        )
+
+        cancelScheduledAlarmIntents(context)
+
+        val scheduledCount = scheduleInternal(
+            context = context,
+            alarms = futureAlarms,
+            exactAllowed = exactAllowed
+        )
 
         Log.d(
             TAG,
-            "scheduleStoredAlarms: stored=${storedAlarms.size}, future=${futureAlarms.size}, scheduled=$scheduledCount"
+            "$source: received=${alarms.size}, future=${futureAlarms.size}, scheduled=$scheduledCount, exact=$exactAllowed"
         )
 
         return scheduledCount
@@ -68,7 +100,8 @@ object NativeAdhanScheduler {
 
     private fun scheduleInternal(
         context: Context,
-        alarms: List<Map<String, Any?>>
+        alarms: List<Map<String, Any?>>,
+        exactAllowed: Boolean
     ): Int {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val now = System.currentTimeMillis()
@@ -106,7 +139,7 @@ object NativeAdhanScheduler {
             )
 
             try {
-                if (canScheduleExactAlarms(context)) {
+                if (exactAllowed) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         alarmManager.setExactAndAllowWhileIdle(
                             AlarmManager.RTC_WAKEUP,
@@ -121,11 +154,9 @@ object NativeAdhanScheduler {
                         )
                     }
                 } else {
-                    val showIntent = buildOpenAppPendingIntent(context, id)
-
                     val alarmClockInfo = AlarmManager.AlarmClockInfo(
                         triggerAtMillis,
-                        showIntent
+                        buildOpenAppPendingIntent(context, id)
                     )
 
                     alarmManager.setAlarmClock(
@@ -138,7 +169,7 @@ object NativeAdhanScheduler {
 
                 Log.d(
                     TAG,
-                    "Scheduled native adhan alarm: id=$id prayer=$prayerEn at=$triggerAtMillis resource=$resourceName exact=${canScheduleExactAlarms(context)}"
+                    "Scheduled native adhan alarm: id=$id prayer=$prayerEn at=$triggerAtMillis resource=$resourceName exact=$exactAllowed"
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to schedule native adhan alarm id=$id", e)
@@ -149,13 +180,16 @@ object NativeAdhanScheduler {
     }
 
     fun cancelAll(context: Context) {
-        cancelAll(context, clearStored = true)
+        val appContext = context.applicationContext
+
+        cancelScheduledAlarmIntents(appContext)
+        stopAdhanService(appContext)
+        clearStoredAlarms(appContext)
+
+        Log.d(TAG, "Cancelled all native adhan alarms. clearStored=true")
     }
 
-    private fun cancelAll(
-        context: Context,
-        clearStored: Boolean
-    ) {
+    private fun cancelScheduledAlarmIntents(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         for (id in REQUEST_BASE until REQUEST_BASE + REQUEST_LIMIT) {
@@ -172,26 +206,9 @@ object NativeAdhanScheduler {
                 alarmManager.cancel(pendingIntent)
                 pendingIntent.cancel()
             }
-
-            val openPendingIntent = PendingIntent.getActivity(
-                context,
-                id + 1000,
-                buildOpenAppIntent(context),
-                PendingIntent.FLAG_NO_CREATE or immutableFlag()
-            )
-
-            if (openPendingIntent != null) {
-                openPendingIntent.cancel()
-            }
         }
 
-        stopAdhanService(context)
-
-        if (clearStored) {
-            clearStoredAlarms(context)
-        }
-
-        Log.d(TAG, "Cancelled all native adhan alarms. clearStored=$clearStored")
+        Log.d(TAG, "Cancelled scheduled native adhan PendingIntents only.")
     }
 
     fun playTestAdhan(
@@ -199,7 +216,9 @@ object NativeAdhanScheduler {
         resourceName: String,
         prayerAr: String
     ) {
-        val serviceIntent = Intent(context, AdhanForegroundService::class.java).apply {
+        val appContext = context.applicationContext
+
+        val serviceIntent = Intent(appContext, AdhanForegroundService::class.java).apply {
             action = AdhanForegroundService.ACTION_PLAY_ADHAN
             putExtra(AdhanForegroundService.EXTRA_ID, 9999)
             putExtra(AdhanForegroundService.EXTRA_PRAYER_EN, "Test")
@@ -213,34 +232,43 @@ object NativeAdhanScheduler {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
+            appContext.startForegroundService(serviceIntent)
         } else {
-            context.startService(serviceIntent)
+            appContext.startService(serviceIntent)
         }
     }
 
     fun stopAdhanService(context: Context) {
-        val stopIntent = Intent(context, AdhanForegroundService::class.java).apply {
+        val appContext = context.applicationContext
+
+        val stopIntent = Intent(appContext, AdhanForegroundService::class.java).apply {
             action = AdhanForegroundService.ACTION_STOP_ADHAN
         }
 
         try {
-            context.startService(stopIntent)
+            appContext.startService(stopIntent)
         } catch (_: Exception) {
             try {
-                context.stopService(Intent(context, AdhanForegroundService::class.java))
+                appContext.stopService(
+                    Intent(appContext, AdhanForegroundService::class.java)
+                )
             } catch (_: Exception) {
             }
         }
     }
 
     fun canScheduleExactAlarms(context: Context): Boolean {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return try {
+            val alarmManager =
+                context.applicationContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            alarmManager.canScheduleExactAlarms()
-        } else {
-            true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                alarmManager.canScheduleExactAlarms()
+            } else {
+                true
+            }
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -251,14 +279,19 @@ object NativeAdhanScheduler {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
 
-            context.startActivity(intent)
+            context.applicationContext.startActivity(intent)
         }
     }
 
     fun isIgnoringBatteryOptimizations(context: Context): Boolean {
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        return try {
+            val powerManager =
+                context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
 
-        return powerManager.isIgnoringBatteryOptimizations(context.packageName)
+            powerManager.isIgnoringBatteryOptimizations(context.packageName)
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun openBatteryOptimizationSettings(context: Context) {
@@ -267,7 +300,7 @@ object NativeAdhanScheduler {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
 
-        context.startActivity(intent)
+        context.applicationContext.startActivity(intent)
     }
 
     private fun sanitizeFutureAlarms(
@@ -300,7 +333,8 @@ object NativeAdhanScheduler {
 
     private fun persistAlarms(
         context: Context,
-        alarms: List<Map<String, Any?>>
+        alarms: List<Map<String, Any?>>,
+        signature: String
     ) {
         try {
             val array = JSONArray()
@@ -322,6 +356,7 @@ object NativeAdhanScheduler {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .putString(PREF_ALARMS, array.toString())
+                .putString(PREF_SIGNATURE, signature)
                 .apply()
 
             Log.d(TAG, "Persisted ${alarms.size} native adhan alarm(s).")
@@ -370,11 +405,45 @@ object NativeAdhanScheduler {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
                 .remove(PREF_ALARMS)
+                .remove(PREF_SIGNATURE)
                 .apply()
 
             Log.d(TAG, "Cleared stored native adhan alarms.")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to clear stored native alarms.", e)
+        }
+    }
+
+    private fun loadStoredSignature(context: Context): String? {
+        return try {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(PREF_SIGNATURE, null)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun buildAlarmsSignature(
+        alarms: List<Map<String, Any?>>,
+        exactAllowed: Boolean
+    ): String {
+        return buildString {
+            append("exact=")
+            append(exactAllowed)
+            append("|")
+
+            alarms
+                .sortedBy { (it["id"] as? Number)?.toInt() ?: 0 }
+                .forEach { alarm ->
+                    append(alarm["id"])
+                    append(":")
+                    append(alarm["triggerAtMillis"])
+                    append(":")
+                    append(alarm["prayerEn"])
+                    append(":")
+                    append(alarm["resourceName"])
+                    append("|")
+                }
         }
     }
 
@@ -391,11 +460,8 @@ object NativeAdhanScheduler {
     }
 
     private fun buildOpenAppIntent(context: Context): Intent {
-        return context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+        return Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        } ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.parse("package:${context.packageName}")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
     }
 
