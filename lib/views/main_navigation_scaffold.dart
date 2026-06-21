@@ -42,7 +42,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   String _getAppBarTitle(AppLocalizations l10n) {
     switch (_currentIndex) {
       case 0:
-        return 'أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ'; // ← النص الجديد
+        return 'أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ';
       case 1:
         return l10n.nobleQuran;
       case 2:
@@ -102,8 +102,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       ),
       body: Stack(
         children: [
-          // Current Selected View
-          Positioned.fill(child: _views[_currentIndex]),
+          // ✅ FIX: IndexedStack يحافظ على state كل الـ tabs
+          // بدلاً من _views[_currentIndex] اللي كان بيدمر ويبني كل tab من الصفر
+          IndexedStack(index: _currentIndex, children: _views),
 
           // Global Floating Player Bar
           const Align(

@@ -124,7 +124,19 @@ class _MyAppState extends State<MyApp> {
     if (_deferredStartupStarted) return;
     _deferredStartupStarted = true;
 
-    // 1) Initialize notifications silently after UI appears.
+    // ✅ FIX 1: rescheduleFromCache فوراً بعد أول فريم
+    // rescheduleFromCache بيقرأ من Hive (محلي) — لا network، لا GPS.
+    // مفيش سبب ينتظر 4 ثواني. ده اللي كان بيخلي التايمر يظهر --:--:-- طول الوقت.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        _adhanScheduler?.rescheduleFromCache();
+      } catch (e) {
+        debugPrint('[Boot] Adhan cache reschedule failed: $e');
+      }
+    });
+
+    // 2) Initialize notifications silently after UI appears.
     // لا تطلب صلاحيات هنا. NotificationService.init() أصبح خفيفًا.
     Future.delayed(const Duration(seconds: 2), () async {
       if (!mounted) return;
@@ -133,18 +145,6 @@ class _MyAppState extends State<MyApp> {
         await NotificationService.init();
       } catch (e) {
         debugPrint('[Boot] Notification init failed: $e');
-      }
-    });
-
-    // 2) Re-schedule adhan from cached prayer times after notification init.
-    // هذا يعطي الشاشة فرصة تظهر الأول.
-    Future.delayed(const Duration(seconds: 4), () {
-      if (!mounted) return;
-
-      try {
-        _adhanScheduler?.rescheduleFromCache();
-      } catch (e) {
-        debugPrint('[Boot] Adhan cache reschedule failed: $e');
       }
     });
 
@@ -205,9 +205,10 @@ class _MyAppState extends State<MyApp> {
           create: (_) {
             final ctrl = RadioController(radio, storage, audio);
 
-            // تأخير تحميل الراديو حتى لا ينافس أول رسم للشاشة.
+            // ✅ FIX 2: تأخير تحميل الراديو من 5 ثواني → ثانية واحدة
+            // الراديو بيحمل بيانات محلية (JSON asset)، مش محتاج 5 ثواني.
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              Future.delayed(const Duration(seconds: 5), () {
+              Future.delayed(const Duration(seconds: 1), () {
                 unawaited(ctrl.fetchStations());
               });
             });

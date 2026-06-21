@@ -42,13 +42,14 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     _startDayChangeTimer();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(seconds: 5), () {
+      Future.delayed(const Duration(seconds: 3), () {
         if (!_prayerService.hasValidCacheForToday()) {
+          // ✅ مفيش كاش صالح ليوم النهارده → محتاجين GPS + API
           unawaited(fetchPrayerTimes());
         } else {
-          Future.delayed(const Duration(seconds: 10), () {
-            unawaited(fetchPrayerTimes());
-          });
+          // ✅ عندنا كاش صالح → مش محتاجين GPS على الفاضي
+          // بس نتأكد إن المستخدم مش سافر لمكان جديد (أكتر من ~50 كيلو)
+          unawaited(_checkIfLocationChangedSignificantly());
         }
       });
     });
@@ -86,6 +87,44 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       });
 
       notifyListeners();
+    }
+  }
+
+  /// ✅ تتأكد إن المستخدم مش سافر أكتر من ~50 كيلو من الكاش المحفوظ.
+  /// لو اتحرك → تجيب بيانات جديدة. لو في نفس المكان → مش بتعمل حاجة.
+  /// بتشتغل في الـ background بهدوء بدون أي loading indicator.
+  Future<void> _checkIfLocationChangedSignificantly() async {
+    final cached = _prayerService.getCachedPrayerTimes();
+
+    // لو الكاش مش فيه إحداثيات → مش نقدر نقارن
+    if (cached?.latitude == null || cached?.longitude == null) return;
+
+    try {
+      final position = await _locationService.getCurrentLocation();
+
+      final latDiff = (cached!.latitude! - position.latitude).abs();
+      final lngDiff = (cached.longitude! - position.longitude).abs();
+
+      // ~0.5 درجة ≈ 55 كيلو
+      // لو المستخدم اتحرك أكتر من كده → اجلب بيانات جديدة بالموقع الجديد
+      if (latDiff > 0.5 || lngDiff > 0.5) {
+        developer.log(
+          'Location changed significantly (Δlat=$latDiff, Δlng=$lngDiff). Fetching new prayer times.',
+          name: 'PrayerController',
+        );
+        unawaited(fetchPrayerTimes(force: true));
+      } else {
+        developer.log(
+          'Location unchanged. Using cached prayer times.',
+          name: 'PrayerController',
+        );
+      }
+    } catch (e) {
+      // لو GPS فشل → ابقى على الكاش بهدوء، مفيش error للمستخدم
+      developer.log(
+        'Location check failed (using cache): $e',
+        name: 'PrayerController',
+      );
     }
   }
 

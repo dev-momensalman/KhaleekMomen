@@ -12,12 +12,17 @@ class QuranView extends StatefulWidget {
   const QuranView({super.key});
 
   @override
-  State createState() => _QuranViewState();
+  State<QuranView> createState() => _QuranViewState();
 }
 
-class _QuranViewState extends State {
+// ✅ FIX: AutomaticKeepAliveClientMixin يمنع إعادة بناء الـ View عند تبديل التابس
+class _QuranViewState extends State<QuranView>
+    with AutomaticKeepAliveClientMixin {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  @override
+  bool get wantKeepAlive => true; // ✅ يحافظ على الـ state
 
   @override
   void dispose() {
@@ -27,9 +32,10 @@ class _QuranViewState extends State {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // ✅ مطلوب مع AutomaticKeepAliveClientMixin
+
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    // ✅ الصح — حدد النوع صراحةً
     final quranController = Provider.of<QuranController>(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -668,7 +674,6 @@ class _RecitersModalState extends State<_RecitersModal> {
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                     itemCount: filtered.length,
-                    // ✅ FIX: (_, _) بدل (_, __) — Dart 3.x wildcard
                     separatorBuilder: (_, _) => const SizedBox(height: 4),
                     itemBuilder: (context, index) {
                       final reciter = filtered[index];

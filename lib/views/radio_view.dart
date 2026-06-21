@@ -12,10 +12,15 @@ class RadioView extends StatefulWidget {
   State<RadioView> createState() => _RadioViewState();
 }
 
-class _RadioViewState extends State<RadioView> {
+// ✅ FIX: AutomaticKeepAliveClientMixin يمنع إعادة بناء الـ View عند تبديل التابس
+class _RadioViewState extends State<RadioView>
+    with AutomaticKeepAliveClientMixin {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int _selectedFilter = 0;
+
+  @override
+  bool get wantKeepAlive => true; // ✅ يحافظ على الـ state
 
   @override
   void dispose() {
@@ -25,6 +30,8 @@ class _RadioViewState extends State<RadioView> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // ✅ مطلوب مع AutomaticKeepAliveClientMixin
+
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final radioController = Provider.of<RadioController>(context);
@@ -161,7 +168,6 @@ class _RadioViewState extends State<RadioView> {
               // Filter Chips
               Row(
                 children: [
-                  // ✅ FIX: l10n بدل نصوص عربية ثابتة
                   _FilterChip(
                     label: l10n.filterAll,
                     icon: Icons.radio_rounded,
@@ -191,7 +197,6 @@ class _RadioViewState extends State<RadioView> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        // ✅ FIX: resultCount من l10n
                         l10n.resultCount(filteredStations.length),
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.primary,
@@ -274,7 +279,6 @@ class _RadioViewState extends State<RadioView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  // ✅ FIX: nowPlaying من l10n
                   l10n.nowPlaying,
                   style: theme.textTheme.labelSmall
                       ?.copyWith(
@@ -338,7 +342,6 @@ class _RadioViewState extends State<RadioView> {
           ),
           const SizedBox(height: 12),
           Text(
-            // ✅ FIX: noFavoriteStationsYet من l10n
             _selectedFilter == 1
                 ? l10n.noFavoriteStationsYet
                 : l10n.noStationsMatch,
