@@ -62,28 +62,37 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_bootstrap());
     });
   }
 
   Future<void> _bootstrap() async {
-    // ── 1. Minimal required startup only ──────────────────────────────────
-    // Keep the first app launch light. Do not initialize notifications,
-    // WorkManager, AudioService, location, or adhan scheduling here.
+    // ── 1. Minimal startup: storage only ─────────────────────────────────
+    // لا نبدأ الإشعارات، WorkManager، الموقع، أو جدولة الأذان هنا.
+    // الهدف إن أول شاشة تظهر بأسرع وقت ممكن.
     try {
       await StorageService.init();
     } catch (e) {
       debugPrint('[Boot] Storage init failed: $e');
     }
 
-    // ── 2. Create lightweight services ───────────────────────────────────
+    // ── 2. Audio engine ─────────────────────────────────────────────────
+    // ملاحظة مهمة:
+    // لا نؤخر AudioServiceWrapper.init() في هذا الملف فقط، لأن AudioServiceWrapper
+    // الحالي يحتاج أن يكون initialized قبل إنشاء الـ instance حتى ترتبط الـ streams.
+    // لو أردنا تأخيره لاحقًا، نحتاج تعديل audio_service.dart نفسه.
+    try {
+      await AudioServiceWrapper.init();
+    } catch (e) {
+      debugPrint('[Boot] Audio init failed: $e');
+    }
+
+    // ── 3. Create app services ──────────────────────────────────────────
     _httpService = HttpService(baseUrl: 'https://mp3quran.net');
     _locationService = LocationService();
     _storageService = StorageService();
-
-    // AudioServiceWrapper object is lightweight. The heavy native
-    // AudioService.init() is delayed in _runDeferredStartupTasks().
     _audioService = AudioServiceWrapper();
 
     _prayerService = PrayerService(
@@ -105,7 +114,7 @@ class _MyAppState extends State<MyApp> {
       _showOnboarding = showOnboarding;
     });
 
-    // ── 3. Start heavy services after the UI is visible ───────────────────
+    // ── 4. Heavy tasks after UI appears ─────────────────────────────────
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _runDeferredStartupTasks();
     });
@@ -115,19 +124,9 @@ class _MyAppState extends State<MyApp> {
     if (_deferredStartupStarted) return;
     _deferredStartupStarted = true;
 
-    // 1) Re-schedule from cached prayer times after the first screen appears.
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-
-      try {
-        _adhanScheduler?.rescheduleFromCache();
-      } catch (e) {
-        debugPrint('[Boot] Adhan cache reschedule failed: $e');
-      }
-    });
-
-    // 2) Initialize notification plugin later to avoid startup jank.
-    Future.delayed(const Duration(seconds: 4), () async {
+    // 1) Initialize notifications silently after UI appears.
+    // لا تطلب صلاحيات هنا. NotificationService.init() أصبح خفيفًا.
+    Future.delayed(const Duration(seconds: 2), () async {
       if (!mounted) return;
 
       try {
@@ -137,7 +136,19 @@ class _MyAppState extends State<MyApp> {
       }
     });
 
-    // 3) Register WorkManager later. It does not need to block app launch.
+    // 2) Re-schedule adhan from cached prayer times after notification init.
+    // هذا يعطي الشاشة فرصة تظهر الأول.
+    Future.delayed(const Duration(seconds: 4), () {
+      if (!mounted) return;
+
+      try {
+        _adhanScheduler?.rescheduleFromCache();
+      } catch (e) {
+        debugPrint('[Boot] Adhan cache reschedule failed: $e');
+      }
+    });
+
+    // 3) Register WorkManager later. It should not block app launch.
     Future.delayed(const Duration(seconds: 7), () async {
       if (!mounted) return;
 
@@ -148,17 +159,9 @@ class _MyAppState extends State<MyApp> {
       }
     });
 
-    // 4) Warm up background audio last. Quran/Radio playback will still work
-    // once the user interacts, but this avoids blocking the first screen.
-    Future.delayed(const Duration(seconds: 10), () async {
-      if (!mounted) return;
-
-      try {
-        await AudioServiceWrapper.init();
-      } catch (e) {
-        debugPrint('[Boot] Audio init failed: $e');
-      }
-    });
+    // لا نستدعي checkAndRequestBatteryOptimization هنا.
+    // هذا الطلب يجب أن يظل من زر فحص موثوقية الأذان داخل الإعدادات،
+    // لأن طلبه في بداية التطبيق يسبب تهنيج وتجربة مزعجة.
   }
 
   @override
@@ -191,8 +194,9 @@ class _MyAppState extends State<MyApp> {
           create: (_) => SettingsController(storage, scheduler, audio),
         ),
 
-        // Keep PrayerController lazy. It will be created when a screen
-        // actually needs it, instead of forcing Geolocator at startup.
+        // مهم:
+        // لا تستخدم lazy:false هنا، حتى لا يبدأ PrayerController و Geolocator
+        // إجباريًا مع بداية التطبيق.
         ChangeNotifierProvider<PrayerController>(
           create: (_) => PrayerController(prayer, location, scheduler),
         ),
@@ -201,7 +205,7 @@ class _MyAppState extends State<MyApp> {
           create: (_) {
             final ctrl = RadioController(radio, storage, audio);
 
-            // Delay station fetching so it does not compete with first render.
+            // تأخير تحميل الراديو حتى لا ينافس أول رسم للشاشة.
             WidgetsBinding.instance.addPostFrameCallback((_) {
               Future.delayed(const Duration(seconds: 5), () {
                 unawaited(ctrl.fetchStations());
