@@ -42,7 +42,15 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     _startDayChangeTimer();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(fetchPrayerTimes());
+      Future.delayed(const Duration(seconds: 5), () {
+        if (!_prayerService.hasValidCacheForToday()) {
+          unawaited(fetchPrayerTimes());
+        } else {
+          Future.delayed(const Duration(seconds: 10), () {
+            unawaited(fetchPrayerTimes());
+          });
+        }
+      });
     });
   }
 

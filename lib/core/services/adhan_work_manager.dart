@@ -101,7 +101,7 @@ Future<void> registerAdhanWorker() async {
     frequency: const Duration(hours: 12),
     initialDelay: const Duration(hours: 1),
     existingWorkPolicy:
-        ExistingPeriodicWorkPolicy.replace, // ✅ FIX #3: النوع الصحيح
+        ExistingPeriodicWorkPolicy.keep, // ✅ FIX #3: النوع الصحيح
     constraints: Constraints(
       networkType: NetworkType.notRequired, // ✅ FIX #4: camelCase الصحيح
       requiresBatteryNotLow: false,

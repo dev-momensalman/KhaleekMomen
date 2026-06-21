@@ -1,5 +1,7 @@
 // lib/main.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -55,67 +57,108 @@ class _MyAppState extends State<MyApp> {
 
   bool _isBootstrapping = true;
   bool _showOnboarding = false;
+  bool _deferredStartupStarted = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_bootstrap());
+    });
   }
 
   Future<void> _bootstrap() async {
-    // ── 1. Hive storage ───────────────────────────────────────────────────
+    // ── 1. Minimal required startup only ──────────────────────────────────
+    // Keep the first app launch light. Do not initialize notifications,
+    // WorkManager, AudioService, location, or adhan scheduling here.
     try {
       await StorageService.init();
     } catch (e) {
       debugPrint('[Boot] Storage init failed: $e');
     }
 
-    // ── 2. OS Prayer Notifications ────────────────────────────────────────
-    try {
-      await NotificationService.init();
-      await NotificationService.checkAndRequestBatteryOptimization();
-    } catch (e) {
-      debugPrint('[Boot] Notification service init failed: $e');
-    }
-
-    // ── 3. Background WorkManager ─────────────────────────────────────────
-    try {
-      await registerAdhanWorker();
-    } catch (e) {
-      debugPrint('[Boot] WorkManager registration failed: $e');
-    }
-
-    // ── 4. Background audio engine ────────────────────────────────────────
-    try {
-      await AudioServiceWrapper.init();
-    } catch (e) {
-      debugPrint('[Boot] Audio init failed: $e');
-    }
-
-    // ── 5. Create services ────────────────────────────────────────────────
+    // ── 2. Create lightweight services ───────────────────────────────────
     _httpService = HttpService(baseUrl: 'https://mp3quran.net');
     _locationService = LocationService();
     _storageService = StorageService();
+
+    // AudioServiceWrapper object is lightweight. The heavy native
+    // AudioService.init() is delayed in _runDeferredStartupTasks().
     _audioService = AudioServiceWrapper();
+
     _prayerService = PrayerService(
       HttpService(baseUrl: 'https://api.aladhan.com/v1'),
       _storageService!,
     );
+
     _radioService = RadioService();
     _quranService = QuranService(_httpService!);
     _azkarService = AzkarService();
     _adhanScheduler = AdhanScheduler(_audioService!, _storageService!);
 
-    // ✅ FIX 1: يحمّل كاش الأذان فوراً قبل ما تتبني الـ UI
-    _adhanScheduler!.rescheduleFromCache();
+    if (!mounted) return;
 
-    if (mounted) {
-      final showOnboarding = !(_storageService?.isOnboardingCompleted ?? false);
-      setState(() {
-        _isBootstrapping = false;
-        _showOnboarding = showOnboarding;
-      });
-    }
+    final showOnboarding = !(_storageService?.isOnboardingCompleted ?? false);
+
+    setState(() {
+      _isBootstrapping = false;
+      _showOnboarding = showOnboarding;
+    });
+
+    // ── 3. Start heavy services after the UI is visible ───────────────────
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runDeferredStartupTasks();
+    });
+  }
+
+  void _runDeferredStartupTasks() {
+    if (_deferredStartupStarted) return;
+    _deferredStartupStarted = true;
+
+    // 1) Re-schedule from cached prayer times after the first screen appears.
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+
+      try {
+        _adhanScheduler?.rescheduleFromCache();
+      } catch (e) {
+        debugPrint('[Boot] Adhan cache reschedule failed: $e');
+      }
+    });
+
+    // 2) Initialize notification plugin later to avoid startup jank.
+    Future.delayed(const Duration(seconds: 4), () async {
+      if (!mounted) return;
+
+      try {
+        await NotificationService.init();
+      } catch (e) {
+        debugPrint('[Boot] Notification init failed: $e');
+      }
+    });
+
+    // 3) Register WorkManager later. It does not need to block app launch.
+    Future.delayed(const Duration(seconds: 7), () async {
+      if (!mounted) return;
+
+      try {
+        await registerAdhanWorker();
+      } catch (e) {
+        debugPrint('[Boot] WorkManager registration failed: $e');
+      }
+    });
+
+    // 4) Warm up background audio last. Quran/Radio playback will still work
+    // once the user interacts, but this avoids blocking the first screen.
+    Future.delayed(const Duration(seconds: 10), () async {
+      if (!mounted) return;
+
+      try {
+        await AudioServiceWrapper.init();
+      } catch (e) {
+        debugPrint('[Boot] Audio init failed: $e');
+      }
+    });
   }
 
   @override
@@ -148,27 +191,35 @@ class _MyAppState extends State<MyApp> {
           create: (_) => SettingsController(storage, scheduler, audio),
         ),
 
-        // ✅ FIX 2: lazy: false — ينشأ فوراً ولا ينتظر تاب الصلاة
+        // Keep PrayerController lazy. It will be created when a screen
+        // actually needs it, instead of forcing Geolocator at startup.
         ChangeNotifierProvider<PrayerController>(
-          lazy: false,
           create: (_) => PrayerController(prayer, location, scheduler),
         ),
 
         ChangeNotifierProvider<RadioController>(
           create: (_) {
             final ctrl = RadioController(radio, storage, audio);
+
+            // Delay station fetching so it does not compete with first render.
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              ctrl.fetchStations();
+              Future.delayed(const Duration(seconds: 5), () {
+                unawaited(ctrl.fetchStations());
+              });
             });
+
             return ctrl;
           },
         ),
+
         ChangeNotifierProvider<QuranController>(
           create: (_) => QuranController(quran, storage, audio),
         ),
+
         ChangeNotifierProvider<AzkarController>(
           create: (_) => AzkarController(azkar),
         ),
+
         ChangeNotifierProvider<HomeController>(
           create: (_) => HomeController(storage, scheduler, audio),
         ),
@@ -186,6 +237,7 @@ class _MyAppState extends State<MyApp> {
             supportedLocales: AppLocalizations.supportedLocales,
             builder: (context, child) {
               final isRtl = settings.locale.languageCode == 'ar';
+
               return Directionality(
                 textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
                 child: child!,
@@ -214,7 +266,6 @@ class _MyAppState extends State<MyApp> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // ✅ FIX: صورة التطبيق بدل أيقونة المسجد
               Container(
                 width: 110,
                 height: 110,

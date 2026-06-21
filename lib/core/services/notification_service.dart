@@ -83,6 +83,47 @@ class NotificationService {
         ),
       );
 
+      // مهم جدًا:
+      // لا تطلب صلاحية الإشعارات أو exact alarm هنا.
+      // init يجب أن يكون خفيفًا حتى لا يسبب تهنيج عند بداية التطبيق.
+      if (Platform.isAndroid) {
+        _exactAlarmPermissionGranted = await canScheduleNativeExactAlarms();
+      } else {
+        _exactAlarmPermissionGranted = true;
+      }
+
+      _isInitialized = true;
+
+      developer.log(
+        'NotificationService initialized silently. Exact alarm: $_exactAlarmPermissionGranted',
+        name: 'NotificationService',
+      );
+    } catch (e, st) {
+      _initFailed = true;
+
+      developer.log(
+        'NotificationService INIT FAILED.\n$e\n$st',
+        name: 'NotificationService',
+      );
+    }
+  }
+
+  /// اطلب الصلاحيات المهمة يدويًا من شاشة الإعدادات أو زر فحص الأذان.
+  ///
+  /// لا تستدعي هذه الدالة عند بداية التطبيق حتى لا تسبب تهنيج أو نوافذ مفاجئة.
+  static Future<void> requestCriticalPermissions() async {
+    if (!_isInitialized) {
+      await init();
+    }
+
+    if (!_isInitialized) return;
+
+    try {
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+
       await androidPlugin?.requestNotificationsPermission();
 
       final exactResult = await androidPlugin?.requestExactAlarmsPermission();
@@ -94,17 +135,13 @@ class NotificationService {
             _exactAlarmPermissionGranted || nativeCanSchedule;
       }
 
-      _isInitialized = true;
-
       developer.log(
-        'NotificationService initialized. Exact alarm: $_exactAlarmPermissionGranted',
+        'Critical notification permissions requested. Exact alarm: $_exactAlarmPermissionGranted',
         name: 'NotificationService',
       );
     } catch (e, st) {
-      _initFailed = true;
-
       developer.log(
-        'NotificationService INIT FAILED.\n$e\n$st',
+        'Request critical permissions failed.\n$e\n$st',
         name: 'NotificationService',
       );
     }
@@ -273,11 +310,15 @@ class NotificationService {
     }
   }
 
-  static Future schedulePrayerNotifications(
+  static Future<void> schedulePrayerNotifications(
     PrayerTimes prayerTimes, {
     required StorageService storage,
     PrayerTimes? tomorrowPrayerTimes,
   }) async {
+    if (!_isInitialized) {
+      await init();
+    }
+
     if (!_isInitialized) {
       developer.log(
         'NotificationService not ready — skipping schedule.',
@@ -334,7 +375,8 @@ class NotificationService {
 
     // مهم جدًا:
     // على Android لا نلغي الأذانات قبل الجدولة.
-    // NativeAdhanScheduler هو المسؤول عن المقارنة وإعادة الجدولة عند الحاجة فقط.
+    // NativeAdhanScheduler هو المسؤول عن مقارنة التوقيع
+    // وتحديد هل يحتاج إعادة جدولة أم لا.
     if (Platform.isAndroid && nativeAlarms.isNotEmpty) {
       final nativeScheduled = await _scheduleNativeAdhanAlarms(nativeAlarms);
 
@@ -347,7 +389,7 @@ class NotificationService {
       }
     }
 
-    // لو Native فشل فقط، نلغي القديم ونستخدم fallback.
+    // لو Native فشل فقط، نلغي القديم ونستخدم Flutter fallback.
     await cancelAllPrayerNotifications();
 
     await _scheduleFlutterLocalNotificationsFallback(
@@ -712,6 +754,10 @@ class NotificationService {
   }
 
   static Future<void> cancelAllPrayerNotifications() async {
+    if (!_isInitialized) {
+      await init();
+    }
+
     try {
       await _cancelNativeAdhanAlarms();
 
@@ -744,6 +790,10 @@ class NotificationService {
   }
 
   static Future<void> checkAndRequestBatteryOptimization() async {
+    if (!_isInitialized) {
+      await init();
+    }
+
     if (!_isInitialized) return;
 
     try {

@@ -100,18 +100,11 @@ class HomeController extends ChangeNotifier {
     final minutes = (diff.inMinutes % 60).toString().padLeft(2, '0');
     final seconds = (diff.inSeconds % 60).toString().padLeft(2, '0');
 
-    _countdownText = '$hours:$minutes:$seconds';
-    notifyListeners();
+    final newCountdownText = '$hours:$minutes:$seconds';
 
-    if (actualRemaining % 30 == 0) {
-      developer.log(
-        'Diagnostic Log - [HomeController]:\n'
-        ' - Current Time: $now\n'
-        ' - Next Prayer: ${_adhanScheduler.scheduledPrayerNameArabic} (${_adhanScheduler.scheduledPrayerName})\n'
-        ' - Next Prayer Time: $target\n'
-        ' - Countdown Text: $_countdownText',
-        name: 'HomeController',
-      );
+    if (_countdownText != newCountdownText) {
+      _countdownText = newCountdownText;
+      notifyListeners();
     }
   }
 
