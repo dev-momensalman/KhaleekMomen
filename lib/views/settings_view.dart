@@ -1,5 +1,3 @@
-// lib/views/settings_view.dart
-
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:islamic_audio_hub/controllers/settings_controller.dart';
 import 'package:islamic_audio_hub/core/services/notification_service.dart';
 import 'package:islamic_audio_hub/core/theme/app_theme.dart';
+import 'package:islamic_audio_hub/data/models/prayer_calculation_method.dart';
 import 'package:islamic_audio_hub/l10n/app_localizations.dart';
 
 class SettingsView extends StatelessWidget {
@@ -26,11 +25,15 @@ class SettingsView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ── 1. تنبيهات ──────────────────────────────────────────────
-        _sectionHeader(context, l10n.audioScheduling),
+        // ── 1. أوقات الصلاة ──────────────────────────────────────────
+        _sectionHeader(
+          context,
+          _t(isArabic, ar: 'أوقات الصلاة', en: 'Prayer Times'),
+        ),
         Card(
           child: Column(
             children: [
+              // تفعيل الأذان
               SwitchListTile(
                 value: ctrl.adhanAutoPlay,
                 title: Text(l10n.adhanAutoplay),
@@ -42,6 +45,7 @@ class SettingsView extends StatelessWidget {
                 onChanged: ctrl.updateAdhanAutoPlay,
               ),
               const Divider(height: 1),
+              // فحص موثوقية الأذان
               ListTile(
                 leading: Container(
                   width: 40,
@@ -66,19 +70,81 @@ class SettingsView extends StatelessWidget {
                 subtitle: Text(
                   _t(
                     isArabic,
-                    ar: 'تأكد من الإشعارات والتنبيهات الدقيقة والبطارية واختبر الأذان.',
-                    en: 'Check notifications, exact alarms, battery settings, and test Adhan.',
+                    ar: 'تأكد من الإشعارات والتنبيهات الدقيقة والبطارية.',
+                    en: 'Check notifications, exact alarms and battery settings.',
                   ),
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => _showAdhanDiagnosticsSheet(context, ctrl),
+              ),
+              const Divider(height: 1),
+              // طريقة حساب الأوقات
+              ListTile(
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.calculate_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  _t(
+                    isArabic,
+                    ar: 'طريقة حساب الأوقات',
+                    en: 'Calculation method',
+                  ),
+                ),
+                subtitle: Text(
+                  ctrl.calculationMethod.displayName(isArabic),
+                  style: TextStyle(color: theme.colorScheme.primary),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => _showCalculationMethodSheet(context, ctrl),
+              ),
+              const Divider(height: 1),
+              // تأخير الأذان
+              ListTile(
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.timer_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  _t(isArabic, ar: 'تأخير الأذان', en: 'Adhan offset'),
+                ),
+                subtitle: Text(
+                  ctrl.adhanOffsetMinutes == 0
+                      ? _t(isArabic, ar: 'بدون تأخير', en: 'No offset')
+                      : _t(
+                          isArabic,
+                          ar: '+${ctrl.adhanOffsetMinutes} دقيقة بعد الوقت المحسوب',
+                          en: '+${ctrl.adhanOffsetMinutes} min after calculated time',
+                        ),
+                  style: TextStyle(color: theme.colorScheme.primary),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => _showAdhanOffsetSheet(context, ctrl),
               ),
             ],
           ),
         ),
         const SizedBox(height: 24),
 
-        // ── 2. صوت الأذان ────────────────────────────────────────────
+        // ── 2. صوت الأذان ──────────────────────────────────────────
         _sectionHeader(context, l10n.adhanSound),
         Card(
           child: ListTile(
@@ -106,7 +172,7 @@ class SettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // ── 3. التخصيص ──────────────────────────────────────────────
+        // ── 3. التخصيص ────────────────────────────────────────────
         _sectionHeader(context, l10n.personalization),
         Card(
           child: Column(
@@ -161,7 +227,7 @@ class SettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // ── 4. عن التطبيق ────────────────────────────────────────────
+        // ── 4. عن التطبيق ──────────────────────────────────────────
         _sectionHeader(context, l10n.aboutApplication),
         Card(
           child: Column(
@@ -185,7 +251,7 @@ class SettingsView extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // ── 5. مطور البرنامج ─────────────────────────────────────────
+        // ── 5. مطور البرنامج ───────────────────────────────────────
         _sectionHeader(context, l10n.appDeveloper),
         _DevCard(isArabic: isArabic),
         const SizedBox(height: 100),
@@ -230,6 +296,39 @@ class SettingsView extends StatelessWidget {
     );
   }
 
+  void _showCalculationMethodSheet(
+    BuildContext context,
+    SettingsController ctrl,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => ChangeNotifierProvider.value(
+        value: ctrl,
+        child: const _CalculationMethodSheet(),
+      ),
+    );
+  }
+
+  void _showAdhanOffsetSheet(BuildContext context, SettingsController ctrl) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => ChangeNotifierProvider.value(
+        value: ctrl,
+        child: const _AdhanOffsetSheet(),
+      ),
+    );
+  }
+
   Widget _sectionHeader(BuildContext context, String title) {
     final theme = Theme.of(context);
     return Padding(
@@ -260,9 +359,305 @@ class SettingsView extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Calculation Method Bottom Sheet
+// ══════════════════════════════════════════════════════════════════════════════
+class _CalculationMethodSheet extends StatelessWidget {
+  const _CalculationMethodSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ctrl = Provider.of<SettingsController>(context);
+    final isArabic = ctrl.locale.languageCode == 'ar';
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.65,
+      minChildSize: 0.45,
+      maxChildSize: 0.92,
+      builder: (_, scrollCtrl) => Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 6),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calculate_rounded,
+                  color: theme.colorScheme.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isArabic ? 'طريقة حساب الأوقات' : 'Calculation Method',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView.builder(
+              controller: scrollCtrl,
+              itemCount: ctrl.availableMethods.length,
+              itemBuilder: (_, i) {
+                final method = ctrl.availableMethods[i];
+                final isSelected = ctrl.calculationMethod == method;
+                return ListTile(
+                  selected: isSelected,
+                  selectedColor: theme.colorScheme.primary,
+                  leading: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.surfaceContainerHighest,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isSelected ? Icons.check_rounded : Icons.mosque_rounded,
+                      color: isSelected
+                          ? Colors.white
+                          : theme.colorScheme.onSurfaceVariant,
+                      size: 18,
+                    ),
+                  ),
+                  title: Text(
+                    method.displayName(isArabic),
+                    style: TextStyle(
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  subtitle: Text(
+                    isArabic ? method.nameEn : method.nameAr,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  onTap: () {
+                    ctrl.updateCalculationMethod(method);
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          isArabic
+                              ? 'تم تغيير طريقة الحساب إلى ${method.nameAr}\nسيتم تحديث الأوقات تلقائياً'
+                              : 'Method changed to ${method.nameEn}\nTimes will update automatically',
+                        ),
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Adhan Offset Bottom Sheet
+// ══════════════════════════════════════════════════════════════════════════════
+class _AdhanOffsetSheet extends StatefulWidget {
+  const _AdhanOffsetSheet();
+
+  @override
+  State<_AdhanOffsetSheet> createState() => _AdhanOffsetSheetState();
+}
+
+class _AdhanOffsetSheetState extends State<_AdhanOffsetSheet> {
+  late int _offset;
+
+  @override
+  void initState() {
+    super.initState();
+    final ctrl = Provider.of<SettingsController>(context, listen: false);
+    _offset = ctrl.adhanOffsetMinutes;
+  }
+
+  bool get _isArabic {
+    return Provider.of<SettingsController>(
+          context,
+          listen: false,
+        ).locale.languageCode ==
+        'ar';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ctrl = Provider.of<SettingsController>(context, listen: false);
+    final isArabic = _isArabic;
+    final presets = [0, 1, 2, 3, 5, 10, 15];
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.55,
+      minChildSize: 0.45,
+      maxChildSize: 0.75,
+      builder: (_, scrollCtrl) => ListView(
+        controller: scrollCtrl,
+        padding: EdgeInsets.zero,
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.timer_rounded,
+                  color: theme.colorScheme.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isArabic ? 'تأخير الأذان' : 'Adhan Offset',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+          // Info
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              isArabic
+                  ? 'أضف دقائق بعد وقت الصلاة المحسوب لمراعاة الاختلافات المحلية.'
+                  : 'Add minutes after the calculated prayer time to account for local differences.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Current value display
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                _offset == 0
+                    ? (isArabic ? 'بدون تأخير' : 'No offset')
+                    : (isArabic ? '+$_offset دقيقة' : '+$_offset min'),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: theme.colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Slider
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Slider(
+              value: _offset.toDouble(),
+              min: 0,
+              max: 30,
+              divisions: 30,
+              label: _offset == 0 ? '0' : '+$_offset',
+              onChanged: (v) => setState(() => _offset = v.round()),
+            ),
+          ),
+          // Presets
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Wrap(
+              spacing: 8,
+              children: presets.map((p) {
+                final isSelected = _offset == p;
+                return FilterChip(
+                  label: Text(p == 0 ? (isArabic ? 'بدون' : 'None') : '+$p'),
+                  selected: isSelected,
+                  onSelected: (_) => setState(() => _offset = p),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Save button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: FilledButton.icon(
+              onPressed: () async {
+                await ctrl.updateAdhanOffsetMinutes(_offset);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        isArabic
+                            ? 'تم الحفظ وإعادة جدولة الأذان ✓'
+                            : 'Saved & Adhan rescheduled ✓',
+                      ),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.save_rounded),
+              label: Text(
+                isArabic ? 'حفظ وإعادة الجدولة' : 'Save & Reschedule',
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Adhan Diagnostics Bottom Sheet
 // ══════════════════════════════════════════════════════════════════════════════
-
 class _AdhanDiagnosticsSheet extends StatefulWidget {
   const _AdhanDiagnosticsSheet();
 
@@ -293,17 +688,14 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
 
   Future<void> _refreshStatus() async {
     setState(() => _loading = true);
-
     PermissionStatus? notificationStatus;
     bool? canScheduleExactAlarms;
     bool? batteryOptimizationIgnored;
-
     try {
       notificationStatus = await Permission.notification.status;
     } catch (_) {
       notificationStatus = null;
     }
-
     try {
       canScheduleExactAlarms = Platform.isAndroid
           ? await NotificationService.canScheduleNativeExactAlarms()
@@ -311,7 +703,6 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
     } catch (_) {
       canScheduleExactAlarms = false;
     }
-
     try {
       batteryOptimizationIgnored = Platform.isAndroid
           ? await NotificationService.isIgnoringBatteryOptimizationsNative()
@@ -319,9 +710,7 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
     } catch (_) {
       batteryOptimizationIgnored = false;
     }
-
     if (!mounted) return;
-
     setState(() {
       _notificationStatus = notificationStatus;
       _canScheduleExactAlarms = canScheduleExactAlarms;
@@ -337,9 +726,7 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
 
   Future<void> _openExactAlarmSettings(SettingsController ctrl) async {
     await ctrl.openExactAlarmSettings();
-
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -354,9 +741,7 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
 
   Future<void> _openBatterySettings(SettingsController ctrl) async {
     await ctrl.openBatteryOptimizationSettings();
-
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -374,14 +759,13 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
     final theme = Theme.of(context);
     final ctrl = Provider.of<SettingsController>(context);
     final isArabic = ctrl.locale.languageCode == 'ar';
-
     final notificationOk = _notificationStatus?.isGranted ?? false;
     final exactOk = _canScheduleExactAlarms ?? false;
     final batteryOk = _batteryOptimizationIgnored ?? false;
 
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.72,
+      initialChildSize: 0.68,
       minChildSize: 0.48,
       maxChildSize: 0.94,
       builder: (_, scrollCtrl) {
@@ -438,8 +822,8 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
                             en: 'Before relying on Adhan',
                           ),
                           body: _t(
-                            ar: 'تأكد من تفعيل الثلاث نقاط التالية، ثم جرّب زر اختبار الأذان. بعض أجهزة Android قد تؤخر الأذان إذا كانت قيود البطارية مفعلة.',
-                            en: 'Make sure the following checks are enabled, then use the Adhan test button. Some Android devices may delay Adhan if battery restrictions are enabled.',
+                            ar: 'تأكد من تفعيل الثلاث نقاط التالية. بعض أجهزة Android قد تؤخر الأذان إذا كانت قيود البطارية مفعلة.',
+                            en: 'Make sure the following checks are enabled. Some Android devices may delay Adhan if battery restrictions are active.',
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -458,8 +842,8 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
                                         en: 'Notifications are enabled.',
                                       )
                                     : _t(
-                                        ar: 'الإشعارات غير مفعّلة. يجب السماح بها حتى يظهر تنبيه وقت الصلاة.',
-                                        en: 'Notifications are not enabled. Allow them to receive prayer alerts.',
+                                        ar: 'الإشعارات غير مفعّلة. يجب السماح بها.',
+                                        en: 'Notifications are not enabled. Please allow them.',
                                       ),
                                 ok: notificationOk,
                                 actionLabel: notificationOk
@@ -478,12 +862,12 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
                                 ),
                                 subtitle: exactOk
                                     ? _t(
-                                        ar: 'التنبيهات الدقيقة مفعّلة. هذا يساعد على تشغيل الأذان في وقته.',
-                                        en: 'Precise alarms are enabled. This helps Adhan fire on time.',
+                                        ar: 'التنبيهات الدقيقة مفعّلة.',
+                                        en: 'Precise alarms are enabled.',
                                       )
                                     : _t(
-                                        ar: 'التنبيهات الدقيقة غير مفعّلة. قد يتأخر الأذان بدونها.',
-                                        en: 'Precise alarms are disabled. Adhan may be delayed without them.',
+                                        ar: 'التنبيهات الدقيقة غير مفعّلة. قد يتأخر الأذان.',
+                                        en: 'Precise alarms are disabled. Adhan may be delayed.',
                                       ),
                                 ok: exactOk,
                                 actionLabel: exactOk
@@ -509,8 +893,8 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
                                         en: 'The app is allowed to run without battery restrictions.',
                                       )
                                     : _t(
-                                        ar: 'قد تمنع قيود البطارية تشغيل الأذان في الخلفية، خاصة أثناء الليل.',
-                                        en: 'Battery restrictions may delay background Adhan, especially overnight.',
+                                        ar: 'قد تمنع قيود البطارية الأذان في الخلفية.',
+                                        en: 'Battery restrictions may delay background Adhan.',
                                       ),
                                 ok: batteryOk,
                                 actionLabel: batteryOk
@@ -526,7 +910,6 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
                             ],
                           ),
                         ),
-
                         const SizedBox(height: 16),
                         FilledButton.icon(
                           onPressed: _refreshStatus,
@@ -538,8 +921,8 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
                         const SizedBox(height: 12),
                         Text(
                           _t(
-                            ar: 'ملاحظة: وضع عدم الإزعاج أو كتم صوت الهاتف قد يمنع سماع الأذان حتى لو كانت الإعدادات هنا صحيحة.',
-                            en: 'Note: Do Not Disturb or muted device volume may prevent hearing Adhan even when these checks are correct.',
+                            ar: 'ملاحظة: وضع عدم الإزعاج أو كتم صوت الهاتف قد يمنع سماع الأذان.',
+                            en: 'Note: Do Not Disturb or muted volume may prevent hearing Adhan.',
                           ),
                           textAlign: isArabic
                               ? TextAlign.right
@@ -559,6 +942,9 @@ class _AdhanDiagnosticsSheetState extends State<_AdhanDiagnosticsSheet> {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Info Card
+// ══════════════════════════════════════════════════════════════════════════════
 class _InfoCard extends StatelessWidget {
   final String title;
   final String body;
@@ -568,7 +954,6 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -611,6 +996,9 @@ class _InfoCard extends StatelessWidget {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Status Tile
+// ══════════════════════════════════════════════════════════════════════════════
 class _StatusTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -632,7 +1020,6 @@ class _StatusTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = ok ? const Color(0xFF2E7D32) : theme.colorScheme.error;
-
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: Container(
@@ -673,7 +1060,6 @@ class _StatusTile extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════════
 // Adhan Bottom Sheet
 // ══════════════════════════════════════════════════════════════════════════════
-
 class _AdhanBottomSheet extends StatefulWidget {
   const _AdhanBottomSheet();
 
@@ -697,7 +1083,6 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
     final l10n = AppLocalizations.of(context)!;
     final ctrl = Provider.of<SettingsController>(context);
     final isArabic = ctrl.locale.languageCode == 'ar';
-
     final filtered = ctrl.availableAdhans
         .where((o) => o.displayName.contains(_query))
         .toList();
@@ -709,7 +1094,6 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
       maxChildSize: 0.92,
       builder: (_, scrollCtrl) => Column(
         children: [
-          // Handle
           Container(
             margin: const EdgeInsets.only(top: 10, bottom: 6),
             width: 40,
@@ -719,8 +1103,6 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
               borderRadius: BorderRadius.circular(4),
             ),
           ),
-
-          // Title
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Row(
@@ -745,8 +1127,6 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
               ],
             ),
           ),
-
-          // Search
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: TextField(
@@ -776,10 +1156,7 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
               ),
             ),
           ),
-
           const Divider(height: 1),
-
-          // List
           Expanded(
             child: filtered.isEmpty
                 ? Center(
@@ -798,7 +1175,6 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
                       final isSelected = ctrl.selectedAdhan == opt;
                       final isPreviewing =
                           ctrl.isPreviewing && ctrl.previewedAdhan == opt;
-
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 20,
@@ -870,9 +1246,8 @@ class _AdhanBottomSheetState extends State<_AdhanBottomSheet> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Developer Card — Material 3
+// Developer Card
 // ══════════════════════════════════════════════════════════════════════════════
-
 class _DevCard extends StatelessWidget {
   final bool isArabic;
   const _DevCard({required this.isArabic});
@@ -882,7 +1257,6 @@ class _DevCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context)!;
-
     return Card(
       elevation: 0,
       clipBehavior: Clip.antiAlias,
@@ -916,7 +1290,6 @@ class _DevCard extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: Row(
             children: [
-              // Avatar
               Stack(
                 children: [
                   Container(
@@ -952,7 +1325,6 @@ class _DevCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Online dot
                   Positioned(
                     bottom: 2,
                     right: 2,
@@ -972,8 +1344,6 @@ class _DevCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(width: 16),
-
-              // Text
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1051,9 +1421,8 @@ class _BrandBadge extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Developer Dialog — Material 3
+// Developer Dialog
 // ══════════════════════════════════════════════════════════════════════════════
-
 class _DevDialog extends StatelessWidget {
   final bool isArabic;
   const _DevDialog({required this.isArabic});
@@ -1093,7 +1462,6 @@ class _DevDialog extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
-
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       clipBehavior: Clip.antiAlias,
@@ -1103,7 +1471,6 @@ class _DevDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ── Hero Header ──────────────────────────────────────────
             Stack(
               clipBehavior: Clip.none,
               alignment: Alignment.bottomCenter,
@@ -1180,9 +1547,7 @@ class _DevDialog extends StatelessWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 52),
-
             Text(
               _t(ar: 'مطور البرنامج', en: 'App Developer'),
               style: theme.textTheme.titleLarge?.copyWith(
@@ -1205,9 +1570,7 @@ class _DevDialog extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
-
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
@@ -1247,27 +1610,21 @@ class _DevDialog extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                _t(
-                  ar: 'اضغط للفتح · اضغط مطولاً للنسخ',
-                  en: 'Tap to open · Long press to copy',
-                ),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(
-                    alpha: 0.6,
-                  ),
-                ),
-                textAlign: TextAlign.center,
+            Text(
+              _t(
+                ar: 'اضغط للفتح · اضغط مطولاً للنسخ',
+                en: 'Tap to open · Long press to copy',
               ),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.6,
+                ),
+              ),
+              textAlign: TextAlign.center,
             ),
-
             const SizedBox(height: 20),
             const Divider(height: 1),
-
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Padding(
@@ -1292,7 +1649,6 @@ class _DevDialog extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════════
 // Action Button
 // ══════════════════════════════════════════════════════════════════════════════
-
 class _ActionBtn extends StatelessWidget {
   final IconData icon;
   final String label;

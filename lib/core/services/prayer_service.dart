@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+
 import 'package:intl/intl.dart';
+
 import 'package:islamic_audio_hub/core/services/http_service.dart';
 import 'package:islamic_audio_hub/core/services/storage_service.dart';
 import 'package:islamic_audio_hub/data/models/prayer_times.dart';
-import 'package:islamic_audio_hub/data/models/prayer_calculation_method.dart';
 
 class PrayerService {
   final HttpService _httpService;
@@ -22,13 +23,16 @@ class PrayerService {
   }) async {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final apiDateStr = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    // ✅ Dynamic method — يقرأ من الإعدادات، افتراضي 5 (الهيئة المصرية)
+    final methodId = _storageService.getPrayerCalculationMethod();
 
     developer.log(
-      'Requesting prayer times for $today (lat: $latitude, lng: $longitude, force: $force)',
+      'Requesting prayer times for $today '
+      '(lat: $latitude, lng: $longitude, method: $methodId, force: $force)',
       name: 'PrayerService',
     );
 
-    // 0. Pre-check: If we already have a valid cache for today and coordinates are close, use it (unless forced)
+    // 0. Pre-check: كاش صالح + موقع قريب + نفس الطريقة → استخدامه مباشرة
     if (!force) {
       final cachedJson = _storageService.get('cached_prayer_times');
       if (cachedJson != null) {
@@ -42,9 +46,11 @@ class PrayerService {
               cachedTimes.longitude != null) {
             final latDiff = (cachedTimes.latitude! - latitude).abs();
             final lngDiff = (cachedTimes.longitude! - longitude).abs();
-            if (latDiff < 0.1 && lngDiff < 0.1) {
+            // نتحقق كمان إن الطريقة المحفوظة هي نفس الطريقة الحالية
+            final cachedMethod = cachedTimes.calculationMethod ?? methodId;
+            if (latDiff < 0.1 && lngDiff < 0.1 && cachedMethod == methodId) {
               developer.log(
-                'Valid today\'s cache for matching location found. Returning cache.',
+                'Valid cache found for today, location & method match. Returning cache.',
                 name: 'PrayerService',
               );
               return cachedTimes;
@@ -59,10 +65,8 @@ class PrayerService {
       }
     }
 
-    // 1. Try fetching from network API
+    // 1. Fetch from network API
     try {
-      // Method 5 = Egyptian General Survey Authority (الهيئة المصرية العامة للمساحة)
-      final methodId = _storageService.getPrayerCalculationMethod();
       final path =
           '/timings/$apiDateStr?latitude=$latitude&longitude=$longitude&method=$methodId';
       final response = await _httpService.get(path);
@@ -82,9 +86,9 @@ class PrayerService {
           latitude: latitude,
           longitude: longitude,
           timezone: meta['timezone']?.toString() ?? 'UTC',
+          calculationMethod: methodId, // ✅ حفظ الطريقة مع البيانات
         );
 
-        // Validation check (non-empty)
         if (prayerTimes.fajr.isEmpty ||
             prayerTimes.dhuhr.isEmpty ||
             prayerTimes.asr.isEmpty ||
@@ -93,14 +97,12 @@ class PrayerService {
           throw Exception('Received incomplete prayer times data from API.');
         }
 
-        // Strict Chronological Validation check
         if (!prayerTimes.isValidChronologically()) {
           throw Exception(
             'Received invalid prayer times from API (failed chronological order check).',
           );
         }
 
-        // Cache the valid response
         await _storageService.put('cached_prayer_times', prayerTimes.toJson());
         await _storageService.put(
           'prayer_times_last_updated',
@@ -108,7 +110,7 @@ class PrayerService {
         );
 
         developer.log(
-          'Saved valid prayer times to cache successfully.',
+          'Saved valid prayer times to cache (method=$methodId).',
           name: 'PrayerService',
         );
         return prayerTimes;
@@ -117,28 +119,27 @@ class PrayerService {
       }
     } catch (e) {
       developer.log(
-        'API call failed or was invalid: $e. Checking cache fallback...',
+        'API call failed: $e. Checking cache fallback...',
         name: 'PrayerService',
       );
 
-      // 2. Fetch from cache fallback
+      // 2. Cache fallback
       final cachedJson = _storageService.get('cached_prayer_times');
       if (cachedJson != null) {
         try {
           final cachedTimes = PrayerTimes.fromJson(
             Map<String, dynamic>.from(cachedJson),
           );
-          // Strict validation: must be for TODAY and should match the chronologically check
           if (cachedTimes.date == today &&
               cachedTimes.isValidChronologically()) {
             developer.log(
-              'Valid today\'s cache found. Using cache.',
+              'Valid cache found. Using cache.',
               name: 'PrayerService',
             );
             return cachedTimes;
           } else {
             developer.log(
-              'Cache is outdated or invalid (cached for: ${cachedTimes.date}, today is: $today).',
+              'Cache outdated (cached: ${cachedTimes.date}, today: $today).',
               name: 'PrayerService',
             );
           }
@@ -150,14 +151,12 @@ class PrayerService {
         }
       }
 
-      // 3. No valid cache found, propagate the error as requested by rules
       throw Exception(
         'Prayer times unavailable: No network connectivity and no valid cached times.',
       );
     }
   }
 
-  /// Check if cached data exists, is valid for today, and is chronologically valid.
   bool hasValidCacheForToday() {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final cachedJson = _storageService.get('cached_prayer_times');
@@ -172,7 +171,6 @@ class PrayerService {
     }
   }
 
-  /// Retrieve the current cached prayer times, even if outdated/offline.
   PrayerTimes? getCachedPrayerTimes() {
     final cachedJson = _storageService.get('cached_prayer_times');
     if (cachedJson == null) return null;
@@ -183,7 +181,6 @@ class PrayerService {
     }
   }
 
-  /// Fetches tomorrow's prayer times from API and caches them separately.
   Future<PrayerTimes?> getTomorrowPrayerTimes({
     required double latitude,
     required double longitude,
@@ -191,6 +188,7 @@ class PrayerService {
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     final tomorrowStr = DateFormat('yyyy-MM-dd').format(tomorrow);
     final apiDateStr = DateFormat('dd-MM-yyyy').format(tomorrow);
+    final methodId = _storageService.getPrayerCalculationMethod(); // ✅
 
     // Return cached if still valid
     final cachedJson = _storageService.get('cached_prayer_times_tomorrow');
@@ -199,7 +197,10 @@ class PrayerService {
         final cached = PrayerTimes.fromJson(
           Map<String, dynamic>.from(cachedJson),
         );
-        if (cached.date == tomorrowStr && cached.isValidChronologically()) {
+        final cachedMethod = cached.calculationMethod ?? methodId;
+        if (cached.date == tomorrowStr &&
+            cached.isValidChronologically() &&
+            cachedMethod == methodId) {
           developer.log('Valid tomorrow cache found.', name: 'PrayerService');
           return cached;
         }
@@ -207,7 +208,6 @@ class PrayerService {
     }
 
     try {
-      final methodId = _storageService.getPrayerCalculationMethod();
       final path =
           '/timings/$apiDateStr?latitude=$latitude&longitude=$longitude&method=$methodId';
       final response = await _httpService.get(path);
@@ -225,6 +225,7 @@ class PrayerService {
           latitude: latitude,
           longitude: longitude,
           timezone: meta['timezone']?.toString() ?? 'UTC',
+          calculationMethod: methodId, // ✅
         );
         if (pt.isValidChronologically()) {
           await _storageService.put(
@@ -232,7 +233,7 @@ class PrayerService {
             pt.toJson(),
           );
           developer.log(
-            'Tomorrow prayer times cached: $tomorrowStr',
+            'Tomorrow prayer times cached: $tomorrowStr (method=$methodId)',
             name: 'PrayerService',
           );
           return pt;
@@ -247,7 +248,6 @@ class PrayerService {
     return null;
   }
 
-  /// Returns cached tomorrow prayer times if still valid, otherwise null.
   PrayerTimes? getCachedTomorrowPrayerTimes() {
     final tomorrowStr = DateFormat(
       'yyyy-MM-dd',

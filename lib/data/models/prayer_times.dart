@@ -1,16 +1,18 @@
 import 'package:intl/intl.dart';
 
 class PrayerTimes {
-  final String date; // YYYY-MM-DD format
-  final String fajr; // HH:mm format
-  final String sunrise; // HH:mm format
-  final String dhuhr; // HH:mm format
-  final String asr; // HH:mm format
-  final String maghrib; // HH:mm format
-  final String isha; // HH:mm format
+  final String date; // YYYY-MM-DD
+  final String fajr; // HH:mm
+  final String sunrise; // HH:mm
+  final String dhuhr; // HH:mm
+  final String asr; // HH:mm
+  final String maghrib; // HH:mm
+  final String isha; // HH:mm
   final double? latitude;
   final double? longitude;
   final String timezone;
+  // ✅ طريقة الحساب المستخدمة — نحفظها مع الكاش لنتحقق منها عند القراءة
+  final int? calculationMethod;
 
   PrayerTimes({
     required this.date,
@@ -23,6 +25,7 @@ class PrayerTimes {
     this.latitude,
     this.longitude,
     required this.timezone,
+    this.calculationMethod, // ✅ اختياري — backward-compatible مع الكاش القديم
   });
 
   factory PrayerTimes.fromJson(Map<String, dynamic> json) {
@@ -37,6 +40,8 @@ class PrayerTimes {
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       timezone: json['timezone']?.toString() ?? 'UTC',
+      calculationMethod:
+          json['calculationMethod'] as int?, // ✅ null if old cache
     );
   }
 
@@ -52,14 +57,12 @@ class PrayerTimes {
       'latitude': latitude,
       'longitude': longitude,
       'timezone': timezone,
+      if (calculationMethod != null)
+        'calculationMethod': calculationMethod, // ✅
     };
   }
 
-  // ── BUG FIX: withDate helper ─────────────────────────────────────────────
-  // Returns a copy of this PrayerTimes but with a different date.
-  // Used by NotificationService to schedule next-day prayers when today's
-  // have all passed — prayer times change only slightly day-to-day (~1-3 min),
-  // so this gives a close enough approximation when exact API data isn't cached.
+  /// Returns a copy with a different date (times stay the same — approximation).
   PrayerTimes withDate(String newDate) {
     return PrayerTimes(
       date: newDate,
@@ -72,10 +75,10 @@ class PrayerTimes {
       latitude: latitude,
       longitude: longitude,
       timezone: timezone,
+      calculationMethod: calculationMethod, // ✅ نحافظ عليها
     );
   }
 
-  // ── isToday / isFuture helpers ───────────────────────────────────────────
   bool get isForToday {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     return date == today;
@@ -85,7 +88,11 @@ class PrayerTimes {
     try {
       final dateParts = date.split('-');
       if (dateParts.length != 3) return false;
-      final d = DateTime(int.parse(dateParts[0]), int.parse(dateParts[1]), int.parse(dateParts[2]));
+      final d = DateTime(
+        int.parse(dateParts[0]),
+        int.parse(dateParts[1]),
+        int.parse(dateParts[2]),
+      );
       final today = DateTime.now();
       final todayMidnight = DateTime(today.year, today.month, today.day);
       return d.isAfter(todayMidnight) || d.isAtSameMomentAs(todayMidnight);
@@ -94,7 +101,6 @@ class PrayerTimes {
     }
   }
 
-  // Helper to parse a time string like "05:12" into a full DateTime on the target date
   DateTime? getDateTimeForPrayer(String timeStr) {
     try {
       final dateParts = date.split('-');
@@ -105,7 +111,7 @@ class PrayerTimes {
       final month = int.parse(dateParts[1]);
       final day = int.parse(dateParts[2]);
 
-      // Strip any extra text (like timezones from API: e.g. "05:12 (EET)")
+      // Strip timezone suffix e.g. "05:12 (EET)"
       final hour = int.parse(timeParts[0].trim().split(' ')[0]);
       final minute = int.parse(timeParts[1].trim().split(' ')[0]);
 
@@ -115,7 +121,6 @@ class PrayerTimes {
     }
   }
 
-  // Helper to check if the times are in chronological order
   bool isValidChronologically() {
     final tFajr = getDateTimeForPrayer(fajr);
     final tSunrise = getDateTimeForPrayer(sunrise);
@@ -124,8 +129,12 @@ class PrayerTimes {
     final tMaghrib = getDateTimeForPrayer(maghrib);
     final tIsha = getDateTimeForPrayer(isha);
 
-    if (tFajr == null || tSunrise == null || tDhuhr == null ||
-        tAsr == null || tMaghrib == null || tIsha == null) {
+    if (tFajr == null ||
+        tSunrise == null ||
+        tDhuhr == null ||
+        tAsr == null ||
+        tMaghrib == null ||
+        tIsha == null) {
       return false;
     }
 
@@ -138,6 +147,8 @@ class PrayerTimes {
 
   @override
   String toString() {
-    return 'PrayerTimes(date: $date, fajr: $fajr, dhuhr: $dhuhr, asr: $asr, maghrib: $maghrib, isha: $isha, tz: $timezone)';
+    return 'PrayerTimes(date: $date, fajr: $fajr, dhuhr: $dhuhr, '
+        'asr: $asr, maghrib: $maghrib, isha: $isha, '
+        'tz: $timezone, method: $calculationMethod)';
   }
 }

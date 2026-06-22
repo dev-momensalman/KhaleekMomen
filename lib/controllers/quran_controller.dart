@@ -51,10 +51,10 @@ class QuranController extends ChangeNotifier {
   List<String> get favoriteSurahIds => _favoriteSurahIds;
   Map<String, dynamic>? get lastReadingPosition => _lastReadingPosition;
 
-  void _loadFavorites() {
-    _favoriteReciterIds = _storageService.getFavoriteReciters();
-    _favoriteSurahIds = _storageService.getFavoriteSurahs();
-  }
+ void _loadFavorites() {
+  _favoriteReciterIds = _storageService.getFavoriteReciters().cast<String>();  // ✅
+  _favoriteSurahIds = _storageService.getFavoriteSurahs().cast<String>();      // ✅
+}
 
   void _loadReadingPosition() {
     _lastReadingPosition = _storageService.getLastReadingPosition();

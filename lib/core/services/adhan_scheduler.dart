@@ -56,7 +56,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         'Cannot schedule Adhan: PrayerTimes is null.',
         name: 'AdhanScheduler',
       );
-
       await NotificationService.cancelAllPrayerNotifications();
       notifyListeners();
       return;
@@ -73,7 +72,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         'Cannot schedule Adhan: PrayerTimes is invalid.',
         name: 'AdhanScheduler',
       );
-
       await NotificationService.cancelAllPrayerNotifications();
       notifyListeners();
       return;
@@ -82,33 +80,45 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     final effectiveTomorrowPrayerTimes =
         tomorrowPrayerTimes ?? _getCachedTomorrowPrayerTimes();
 
+    // ✅ قراءة التأخير من الإعدادات
+    final offsetMinutes = _storageService.getAdhanOffsetMinutes();
+
     _scheduleInProcessTimer(
       effectiveTodayPrayerTimes,
       tomorrowPrayerTimes: effectiveTomorrowPrayerTimes,
+      offsetMinutes: offsetMinutes,
     );
 
     if (_storageService.isAdhanAutoPlayEnabled()) {
+      // ✅ تطبيق التأخير على الإشعارات الأصلية أيضاً
+      final todayWithOffset = offsetMinutes > 0
+          ? _applyOffset(effectiveTodayPrayerTimes, offsetMinutes)
+          : effectiveTodayPrayerTimes;
+      final tomorrowWithOffset =
+          (effectiveTomorrowPrayerTimes != null && offsetMinutes > 0)
+          ? _applyOffset(effectiveTomorrowPrayerTimes, offsetMinutes)
+          : effectiveTomorrowPrayerTimes;
+
       await NotificationService.schedulePrayerNotifications(
-        effectiveTodayPrayerTimes,
+        todayWithOffset,
         storage: _storageService,
-        tomorrowPrayerTimes: effectiveTomorrowPrayerTimes,
+        tomorrowPrayerTimes: tomorrowWithOffset,
       );
     } else {
       developer.log(
         'Adhan autoplay disabled — cancelling OS/native notification scheduling.',
         name: 'AdhanScheduler',
       );
-
       await NotificationService.cancelAllPrayerNotifications();
     }
 
     notifyListeners();
   }
 
+  // ── Getters ────────────────────────────────────────────────────────────
+
   DateTime? get scheduledTime => _scheduledTime;
-
   String? get scheduledPrayerName => _scheduledPrayerName;
-
   bool get hasBeenScheduled => _hasBeenScheduled;
 
   String? get scheduledPrayerNameArabic => _scheduledPrayerName != null
@@ -126,7 +136,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         'App resumed — recalculating Adhan schedule.',
         name: 'AdhanScheduler',
       );
-
       _rescheduleAfterFired();
     }
   }
@@ -138,25 +147,55 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     super.dispose();
   }
 
+  // ── Private Helpers ────────────────────────────────────────────────────
+
+  /// ✅ تطبيق تأخير بالدقائق على كل أوقات الصلاة
+  PrayerTimes _applyOffset(PrayerTimes pt, int offsetMinutes) {
+    if (offsetMinutes == 0) return pt;
+
+    String shift(String timeStr) {
+      try {
+        final parts = timeStr.split(':');
+        if (parts.length < 2) return timeStr;
+        final h = int.parse(parts[0].trim());
+        final m = int.parse(parts[1].trim().split(' ')[0]);
+        final totalMins = h * 60 + m + offsetMinutes;
+        final newH = (totalMins ~/ 60) % 24;
+        final newM = totalMins % 60;
+        return '${newH.toString().padLeft(2, '0')}:${newM.toString().padLeft(2, '0')}';
+      } catch (_) {
+        return timeStr;
+      }
+    }
+
+    return PrayerTimes(
+      date: pt.date,
+      fajr: shift(pt.fajr),
+      sunrise: shift(pt.sunrise),
+      dhuhr: shift(pt.dhuhr),
+      asr: shift(pt.asr),
+      maghrib: shift(pt.maghrib),
+      isha: shift(pt.isha),
+      latitude: pt.latitude,
+      longitude: pt.longitude,
+      timezone: pt.timezone,
+    );
+  }
+
   PrayerTimes? _getCachedTodayPrayerTimes() {
     final cachedJson = _storageService.get('cached_prayer_times');
     if (cachedJson == null) return null;
-
     try {
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
       final cached = PrayerTimes.fromJson(
         Map<String, dynamic>.from(cachedJson),
       );
-
       if (cached.date == todayStr && cached.isValidChronologically()) {
         return cached;
       }
-
       if (cached.isValidChronologically()) {
         return cached.withDate(todayStr);
       }
-
       return null;
     } catch (e) {
       developer.log(
@@ -171,22 +210,17 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     final tomorrowCachedJson = _storageService.get(
       'cached_prayer_times_tomorrow',
     );
-
     if (tomorrowCachedJson == null) return null;
-
     try {
       final tomorrowStr = DateFormat(
         'yyyy-MM-dd',
       ).format(DateTime.now().add(const Duration(days: 1)));
-
       final cached = PrayerTimes.fromJson(
         Map<String, dynamic>.from(tomorrowCachedJson),
       );
-
       if (cached.date == tomorrowStr && cached.isValidChronologically()) {
         return cached;
       }
-
       return null;
     } catch (e) {
       developer.log(
@@ -201,10 +235,8 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final timeParts = timeStr.split(':');
       if (timeParts.length != 2) return null;
-
       final hour = int.parse(timeParts[0].trim().split(' ')[0]);
       final minute = int.parse(timeParts[1].trim().split(' ')[0]);
-
       return DateTime(
         targetDate.year,
         targetDate.month,
@@ -220,9 +252,8 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
   void _scheduleInProcessTimer(
     PrayerTimes prayerTimes, {
     PrayerTimes? tomorrowPrayerTimes,
+    int offsetMinutes = 0, // ✅
   }) {
-
-    
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));
@@ -231,31 +262,40 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         tomorrowPrayerTimes ??
         prayerTimes.withDate(DateFormat('yyyy-MM-dd').format(tomorrow));
 
+    // ✅ دالة مساعدة: تحول وقت الصلاة مع التأخير لـ DateTime
+    DateTime? parseWithOffset(DateTime date, String timeStr) {
+      final base = _parseTimeOnDate(date, timeStr);
+      if (base == null) return null;
+      return offsetMinutes > 0
+          ? base.add(Duration(minutes: offsetMinutes))
+          : base;
+    }
+
     final prayers = [
-      _PrayerTimeEntry('Fajr', _parseTimeOnDate(today, prayerTimes.fajr)),
-      _PrayerTimeEntry('Dhuhr', _parseTimeOnDate(today, prayerTimes.dhuhr)),
-      _PrayerTimeEntry('Asr', _parseTimeOnDate(today, prayerTimes.asr)),
-      _PrayerTimeEntry('Maghrib', _parseTimeOnDate(today, prayerTimes.maghrib)),
-      _PrayerTimeEntry('Isha', _parseTimeOnDate(today, prayerTimes.isha)),
+      _PrayerTimeEntry('Fajr', parseWithOffset(today, prayerTimes.fajr)),
+      _PrayerTimeEntry('Dhuhr', parseWithOffset(today, prayerTimes.dhuhr)),
+      _PrayerTimeEntry('Asr', parseWithOffset(today, prayerTimes.asr)),
+      _PrayerTimeEntry('Maghrib', parseWithOffset(today, prayerTimes.maghrib)),
+      _PrayerTimeEntry('Isha', parseWithOffset(today, prayerTimes.isha)),
       _PrayerTimeEntry(
         'Fajr',
-        _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.fajr),
+        parseWithOffset(tomorrow, effectiveTomorrowPrayerTimes.fajr),
       ),
       _PrayerTimeEntry(
         'Dhuhr',
-        _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.dhuhr),
+        parseWithOffset(tomorrow, effectiveTomorrowPrayerTimes.dhuhr),
       ),
       _PrayerTimeEntry(
         'Asr',
-        _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.asr),
+        parseWithOffset(tomorrow, effectiveTomorrowPrayerTimes.asr),
       ),
       _PrayerTimeEntry(
         'Maghrib',
-        _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.maghrib),
+        parseWithOffset(tomorrow, effectiveTomorrowPrayerTimes.maghrib),
       ),
       _PrayerTimeEntry(
         'Isha',
-        _parseTimeOnDate(tomorrow, effectiveTomorrowPrayerTimes.isha),
+        parseWithOffset(tomorrow, effectiveTomorrowPrayerTimes.isha),
       ),
     ];
 
@@ -264,7 +304,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 
     for (final entry in prayers) {
       final time = entry.time;
-
       if (time != null && time.isAfter(now)) {
         if (nextPrayerTime == null || time.isBefore(nextPrayerTime)) {
           nextPrayerTime = time;
@@ -285,11 +324,14 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     _scheduledPrayerName = nextPrayerName;
 
     final duration = nextPrayerTime.difference(now);
+    final offsetNote = offsetMinutes > 0
+        ? ' (+${offsetMinutes}min offset)'
+        : '';
 
     developer.log(
       'AdhanScheduler: next prayer = '
       '${_arabicNames[nextPrayerName] ?? nextPrayerName} '
-      'in ${duration.inSeconds}s at $nextPrayerTime',
+      'in ${duration.inSeconds}s at $nextPrayerTime$offsetNote',
       name: 'AdhanScheduler',
     );
 
@@ -309,7 +351,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         'Adhan autoplay disabled — skipping audio.',
         name: 'AdhanScheduler',
       );
-
       _rescheduleAfterFired();
       return;
     }
@@ -319,10 +360,8 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         'Android foreground timer fired. Native alarm/service is responsible for full adhan audio.',
         name: 'AdhanScheduler',
       );
-
       _scheduledTime = null;
       _scheduledPrayerName = null;
-
       Future.delayed(const Duration(minutes: 2), _rescheduleAfterFired);
       notifyListeners();
       return;
@@ -339,7 +378,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     _audioService.lockForAdhan(arabicName);
 
     final savedFile = _storageService.getSelectedAdhanSound();
-
     final selectedOption = AdhanSoundOption.fromFileName(
       savedFile.isEmpty ? null : savedFile,
     );
@@ -349,15 +387,11 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     Future<void> onComplete() async {
       if (completed) return;
       completed = true;
-
       _audioService.unlockFromAdhan();
-
       await NotificationService.cancelAdhanNotification();
-
       if (legacyNotifId != null) {
         await NotificationService.cancelById(legacyNotifId);
       }
-
       _rescheduleAfterFired();
     }
 
@@ -373,7 +407,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
         'AdhanPlayer failed: $err — trying network fallback.',
         name: 'AdhanScheduler',
       );
-
       try {
         await AdhanPlayer.play(
           _fallbackAdhanUrl,
@@ -386,7 +419,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
           'Fallback also failed: $e — unlocking anyway.',
           name: 'AdhanScheduler',
         );
-
         await onComplete();
       }
     }
@@ -397,10 +429,8 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       'AdhanScheduler: rescheduling after adhan.',
       name: 'AdhanScheduler',
     );
-
     final todayPrayerTimes = _getCachedTodayPrayerTimes();
     final tomorrowPrayerTimes = _getCachedTomorrowPrayerTimes();
-
     if (todayPrayerTimes == null) {
       developer.log(
         'Cannot reschedule: no valid cached prayer times.',
@@ -408,7 +438,6 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
       );
       return;
     }
-
     unawaited(
       scheduleNextAdhan(
         todayPrayerTimes,
@@ -428,6 +457,5 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
 class _PrayerTimeEntry {
   final String name;
   final DateTime? time;
-
   const _PrayerTimeEntry(this.name, this.time);
 }

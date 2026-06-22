@@ -10,8 +10,8 @@ import 'package:islamic_audio_hub/core/services/notification_service.dart';
 import 'package:islamic_audio_hub/core/services/storage_service.dart';
 import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
 import 'package:islamic_audio_hub/data/models/audio_state.dart';
-import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 import 'package:islamic_audio_hub/data/models/prayer_calculation_method.dart';
+import 'package:islamic_audio_hub/data/models/prayer_times.dart';
 
 class SettingsController extends ChangeNotifier {
   final StorageService _storageService;
@@ -23,12 +23,18 @@ class SettingsController extends ChangeNotifier {
   bool _adhanAutoPlay = true;
   bool _isTestingNativeAdhan = false;
 
+  // ✅ طريقة حساب الأوقات
+  PrayerCalculationMethod _calculationMethod = PrayerCalculationMethod.egyptian;
+
+  // ✅ تأخير الأذان بالدقائق
+  int _adhanOffsetMinutes = 0;
+
   Timer? _debounceTimer;
 
   AdhanSoundOption _selectedAdhan = AdhanSoundOption.all.first;
   bool _isPreviewing = false;
   AdhanSoundOption? _previewedAdhan;
-  StreamSubscription? _audioSubscription;
+  StreamSubscription<dynamic>? _audioSubscription;
 
   SettingsController(
     this._storageService,
@@ -36,44 +42,9 @@ class SettingsController extends ChangeNotifier {
     this._audioService,
   ) {
     _loadSettings();
-
     _listenToAudioState();
   }
-  PrayerCalculationMethod _calculationMethod = PrayerCalculationMethod.egyptian;
 
-  PrayerCalculationMethod get calculationMethod => _calculationMethod;
-  List<PrayerCalculationMethod> get availableMethods =>
-      PrayerCalculationMethod.values;
-
-      Future<void> updateCalculationMethod(PrayerCalculationMethod method) async {
-  if (_calculationMethod == method) return;
-  _calculationMethod = method;
-  await _storageService.setPrayerCalculationMethod(method.id);
-  notifyListeners();
-
-  // مسح الكاش القديم عشان يجيب أوقات جديدة بالطريقة الجديدة
-  await _storageService.delete('cached_prayer_times');
-  await _storageService.delete('cached_prayer_times_tomorrow');
-
-  developer.log(
-    'Calculation method changed to: ${method.nameEn} (id=${method.id})',
-    name: 'SettingsController',
-  );
-}
-int _adhanOffsetMinutes = 0;
-
-int get adhanOffsetMinutes => _adhanOffsetMinutes;
-
-// في _loadSettings():
-_adhanOffsetMinutes = _storageService.getAdhanOffsetMinutes();
-
-// دالة جديدة:
-Future<void> updateAdhanOffsetMinutes(int minutes) async {
-  _adhanOffsetMinutes = minutes;
-  await _storageService.setAdhanOffsetMinutes(minutes);
-  notifyListeners();
-  await _rescheduleAdhanFromCache(reason: 'adhan offset changed to ${minutes}min');
-}
   void _listenToAudioState() {
     _audioSubscription = _audioService.stateStream.listen((state) {
       final isNowPreviewing =
@@ -97,25 +68,28 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
     });
   }
 
+  // ── Getters ────────────────────────────────────────────────────────────
+
   ThemeMode get themeMode => _themeMode;
-
   Locale get locale => _locale;
-
   bool get adhanAutoPlay => _adhanAutoPlay;
-
   List<AdhanSoundOption> get availableAdhans => AdhanSoundOption.all;
-
   AdhanSoundOption get selectedAdhan => _selectedAdhan;
-
   bool get isPreviewing => _isPreviewing;
-
   AdhanSoundOption? get previewedAdhan => _previewedAdhan;
-
   bool get isTestingNativeAdhan => _isTestingNativeAdhan;
 
+  // ✅ getters جديدة
+  PrayerCalculationMethod get calculationMethod => _calculationMethod;
+  List<PrayerCalculationMethod> get availableMethods =>
+      PrayerCalculationMethod.values;
+  int get adhanOffsetMinutes => _adhanOffsetMinutes;
+
+  // ── Load Settings ──────────────────────────────────────────────────────
+
   void _loadSettings() {
-    final methodId = _storageService.getPrayerCalculationMethod();
-    _calculationMethod = PrayerCalculationMethod.fromId(methodId);
+    final themeStr = _storageService.getThemeMode();
+    _themeMode = _parseThemeMode(themeStr);
 
     final langStr = _storageService.getLanguage();
     _locale = Locale(langStr);
@@ -126,6 +100,13 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
     _selectedAdhan = AdhanSoundOption.fromFileName(
       savedFile.isEmpty ? null : savedFile,
     );
+
+    // ✅ تحميل طريقة الحساب
+    final methodId = _storageService.getPrayerCalculationMethod();
+    _calculationMethod = PrayerCalculationMethod.fromId(methodId);
+
+    // ✅ تحميل التأخير
+    _adhanOffsetMinutes = _storageService.getAdhanOffsetMinutes();
   }
 
   ThemeMode _parseThemeMode(String theme) {
@@ -140,13 +121,13 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
     }
   }
 
+  // ── Update Methods ─────────────────────────────────────────────────────
+
   Future<void> updateThemeMode(ThemeMode mode) async {
     _themeMode = mode;
-
     String modeStr = 'system';
     if (mode == ThemeMode.light) modeStr = 'light';
     if (mode == ThemeMode.dark) modeStr = 'dark';
-
     await _storageService.setThemeMode(modeStr);
     notifyListeners();
   }
@@ -162,7 +143,6 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
     notifyListeners();
 
     _debounceTimer?.cancel();
-
     _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
       await _storageService.setAdhanAutoPlay(enabled);
 
@@ -171,13 +151,10 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
       } else {
         await NotificationService.cancelAllPrayerNotifications();
         await NotificationService.stopNativeAdhan();
-
         stopPreview();
-
         if (_audioService.currentState.mode == AudioMode.adhan) {
           await _audioService.stop();
         }
-
         developer.log(
           'Adhan autoplay disabled — all notifications/native alarms cancelled.',
           name: 'SettingsController',
@@ -186,14 +163,49 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
     });
   }
 
-  Future<void> selectAdhan(AdhanSoundOption option) async {
-    stopPreview();
+  /// ✅ تغيير طريقة حساب الأوقات — يمسح الكاش ويعيد الجدولة
+  Future<void> updateCalculationMethod(PrayerCalculationMethod method) async {
+    if (_calculationMethod == method) return;
+    _calculationMethod = method;
+    await _storageService.setPrayerCalculationMethod(method.id);
 
-    _selectedAdhan = option;
-    await _storageService.saveSelectedAdhanSound(option.fileName);
+    // مسح الكاش القديم عشان يجيب أوقات جديدة بالطريقة الجديدة
+    await _storageService.delete('cached_prayer_times');
+    await _storageService.delete('cached_prayer_times_tomorrow');
 
     notifyListeners();
 
+    developer.log(
+      'Calculation method changed to: ${method.nameEn} (id=${method.id}). Cache cleared.',
+      name: 'SettingsController',
+    );
+
+    // ملاحظة: الأوقات الجديدة ستُجلب تلقائياً في المرة القادمة التي
+    // يفتح فيها المستخدم التطبيق أو عند استئناف التطبيق من الخلفية.
+    // لو عندك PrayerController accessible هنا ممكن تعمل force fetch.
+  }
+
+  /// ✅ تغيير تأخير الأذان — يحفظ ويعيد الجدولة فوراً
+  Future<void> updateAdhanOffsetMinutes(int minutes) async {
+    _adhanOffsetMinutes = minutes;
+    await _storageService.setAdhanOffsetMinutes(minutes);
+    notifyListeners();
+
+    await _rescheduleAdhanFromCache(
+      reason: 'adhan offset changed to ${minutes}min',
+    );
+
+    developer.log(
+      'Adhan offset set to $minutes minutes.',
+      name: 'SettingsController',
+    );
+  }
+
+  Future<void> selectAdhan(AdhanSoundOption option) async {
+    stopPreview();
+    _selectedAdhan = option;
+    await _storageService.saveSelectedAdhanSound(option.fileName);
+    notifyListeners();
     await _rescheduleAdhanFromCache(
       reason: 'adhan sound changed to ${option.displayName}',
     );
@@ -207,9 +219,7 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
       );
       return;
     }
-
     stopPreview();
-
     try {
       await _audioService.play(
         option.assetPath,
@@ -224,23 +234,18 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
 
   Future<void> testNativeAdhan() async {
     if (_isTestingNativeAdhan) return;
-
     _isTestingNativeAdhan = true;
     notifyListeners();
-
     try {
       stopPreview();
-
       if (_audioService.currentState.mode == AudioMode.adhan ||
           _audioService.currentState.isPlaying) {
         await _audioService.stop();
       }
-
       await NotificationService.playNativeTestAdhan(
         rawResourceName: _selectedAdhan.rawResourceName,
         prayerAr: 'اختبار الأذان',
       );
-
       developer.log(
         'Native Adhan test started: ${_selectedAdhan.displayName}',
         name: 'SettingsController',
@@ -273,6 +278,8 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
     unawaited(_audioService.stop());
   }
 
+  // ── Reschedule ─────────────────────────────────────────────────────────
+
   Future<void> _rescheduleAdhanFromCache({required String reason}) async {
     final todayPrayerTimes = _getCachedTodayPrayerTimes();
     final tomorrowPrayerTimes = _getCachedTomorrowPrayerTimes();
@@ -290,7 +297,6 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
         todayPrayerTimes,
         tomorrowPrayerTimes: tomorrowPrayerTimes,
       );
-
       developer.log(
         'Adhan rescheduled successfully after $reason.',
         name: 'SettingsController',
@@ -305,24 +311,18 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
 
   PrayerTimes? _getCachedTodayPrayerTimes() {
     final cachedJson = _storageService.get('cached_prayer_times');
-
     if (cachedJson == null) return null;
-
     try {
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
       final cached = PrayerTimes.fromJson(
         Map<String, dynamic>.from(cachedJson),
       );
-
       if (cached.date == todayStr && cached.isValidChronologically()) {
         return cached;
       }
-
       if (cached.isValidChronologically()) {
         return cached.withDate(todayStr);
       }
-
       return null;
     } catch (e) {
       developer.log(
@@ -335,22 +335,17 @@ Future<void> updateAdhanOffsetMinutes(int minutes) async {
 
   PrayerTimes? _getCachedTomorrowPrayerTimes() {
     final tomorrowJson = _storageService.get('cached_prayer_times_tomorrow');
-
     if (tomorrowJson == null) return null;
-
     try {
       final tomorrowStr = DateFormat(
         'yyyy-MM-dd',
       ).format(DateTime.now().add(const Duration(days: 1)));
-
       final cached = PrayerTimes.fromJson(
         Map<String, dynamic>.from(tomorrowJson),
       );
-
       if (cached.date == tomorrowStr && cached.isValidChronologically()) {
         return cached;
       }
-
       return null;
     } catch (e) {
       developer.log(

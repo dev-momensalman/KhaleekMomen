@@ -17,16 +17,10 @@ class StorageService {
         name: 'StorageService',
       );
     } catch (e) {
-      developer.log('Error initializing Hive: \$e', name: 'StorageService');
+      developer.log('Error initializing Hive: $e', name: 'StorageService');
       rethrow;
     }
   }
-
-  int getAdhanOffsetMinutes() =>
-      get('adhan_offset_minutes', defaultValue: 0) as int;
-
-  Future<void> setAdhanOffsetMinutes(int minutes) =>
-      put('adhan_offset_minutes', minutes);
 
   // Core API Methods
   dynamic get(String key, {dynamic defaultValue}) {
@@ -45,37 +39,37 @@ class StorageService {
     await _box.clear();
   }
 
-  // Helper getters/setters for specific features
+  // ── Favorites ────────────────────────────────────────────────────────
 
-  // Favorites
-  List<String> getFavoriteStations() {
+  List<dynamic> getFavoriteStations() {
     final list = get('fav_stations');
-    return list != null ? List<String>.from(list) : [];
+    return list != null ? List.from(list) : [];
   }
 
-  Future<void> setFavoriteStations(List<String> ids) async {
+  Future<void> setFavoriteStations(List<dynamic> ids) async {
     await put('fav_stations', ids);
   }
 
-  List<String> getFavoriteReciters() {
+  List<dynamic> getFavoriteReciters() {
     final list = get('fav_reciters');
-    return list != null ? List<String>.from(list) : [];
+    return list != null ? List.from(list) : [];
   }
 
-  Future<void> setFavoriteReciters(List<String> ids) async {
+  Future<void> setFavoriteReciters(List<dynamic> ids) async {
     await put('fav_reciters', ids);
   }
 
-  List<String> getFavoriteSurahs() {
+  List<dynamic> getFavoriteSurahs() {
     final list = get('fav_surahs');
-    return list != null ? List<String>.from(list) : [];
+    return list != null ? List.from(list) : [];
   }
 
-  Future<void> setFavoriteSurahs(List<String> ids) async {
+  Future<void> setFavoriteSurahs(List<dynamic> ids) async {
     await put('fav_surahs', ids);
   }
 
-  // Settings
+  // ── Settings ─────────────────────────────────────────────────────────
+
   String getThemeMode() {
     return get('theme_mode', defaultValue: 'system');
   }
@@ -92,7 +86,8 @@ class StorageService {
     await put('language', lang);
   }
 
-  // Audio Auto-play Settings
+  // ── Adhan Auto-play ───────────────────────────────────────────────────
+
   bool isAdhanAutoPlayEnabled() {
     return get('adhan_autoplay', defaultValue: true);
   }
@@ -101,7 +96,8 @@ class StorageService {
     await put('adhan_autoplay', enabled);
   }
 
-  // Adhan Sound Selection
+  // ── Adhan Sound Selection ─────────────────────────────────────────────
+
   String getSelectedAdhanSound() {
     return get('adhan_sound_file', defaultValue: '') as String;
   }
@@ -110,7 +106,29 @@ class StorageService {
     await put('adhan_sound_file', fileName);
   }
 
-  // Last Played Audio State
+  // ── Prayer Calculation Method ─────────────────────────────────────────
+  // AlAdhan API method ID — default 5 (Egyptian General Authority)
+
+  int getPrayerCalculationMethod() {
+    return get('prayer_calc_method', defaultValue: 5) as int;
+  }
+
+  Future<void> setPrayerCalculationMethod(int methodId) async {
+    await put('prayer_calc_method', methodId);
+  }
+
+  // ── Adhan Offset (minutes to add after calculated time) ───────────────
+
+  int getAdhanOffsetMinutes() {
+    return get('adhan_offset_minutes', defaultValue: 0) as int;
+  }
+
+  Future<void> setAdhanOffsetMinutes(int minutes) async {
+    await put('adhan_offset_minutes', minutes);
+  }
+
+  // ── Last Played Audio State ───────────────────────────────────────────
+
   Map<String, dynamic>? getLastPlayedAudio() {
     final data = get('last_played_audio');
     if (data == null) return null;
@@ -121,7 +139,7 @@ class StorageService {
     await put('last_played_audio', data);
   }
 
-  // ── Onboarding ─────────────────────────────────────────────────────
+  // ── Onboarding ────────────────────────────────────────────────────────
 
   bool get isOnboardingCompleted {
     return get('onboarding_completed', defaultValue: false) as bool;
@@ -134,9 +152,6 @@ class StorageService {
 
   // ── Reading Position (Resume Reading) ────────────────────────────────
 
-  /// Returns the last saved reading position, or null if none saved.
-  /// Map keys: 'surahNumber' (int), 'ayahNumber' (int),
-  ///           'surahName' (String), 'timestamp' (String ISO-8601)
   Map<String, dynamic>? getLastReadingPosition() {
     final data = get('last_reading_position');
     if (data == null) return null;
@@ -147,33 +162,22 @@ class StorageService {
     }
   }
 
-  /// Persists the current reading position. Call on scroll/ayah change.
   Future<void> saveLastReadingPosition({
     required int surahNumber,
     required int ayahNumber,
     required String surahName,
-    double scrollOffset = 0.0, // ← جديد
+    double scrollOffset = 0.0,
   }) async {
     await _box.put('last_reading_position', {
       'surahNumber': surahNumber,
       'ayahNumber': ayahNumber,
       'surahName': surahName,
-      'scrollOffset': scrollOffset, // ← جديد
+      'scrollOffset': scrollOffset,
       'timestamp': DateTime.now().toIso8601String(),
     });
   }
 
-  /// Clears the saved reading position (e.g. user finishes a surah).
   Future<void> clearLastReadingPosition() async {
     await delete('last_reading_position');
-  }
-
-  // ── Prayer Calculation Method ─────────────────────────────────────────
-  int getPrayerCalculationMethod() {
-    return get('prayer_calc_method', defaultValue: 5) as int;
-  }
-
-  Future<void> setPrayerCalculationMethod(int methodId) async {
-    await put('prayer_calc_method', methodId);
   }
 }

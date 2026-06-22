@@ -41,7 +41,9 @@ class RadioController extends ChangeNotifier {
       _stations.where((s) => _favoriteStationIds.contains(s.id)).toList();
 
   void _loadFavorites() {
-    _favoriteStationIds = _storageService.getFavoriteStations();
+    _favoriteStationIds = _storageService
+        .getFavoriteStations()
+        .cast<String>(); // ✅
     notifyListeners();
   }
 
