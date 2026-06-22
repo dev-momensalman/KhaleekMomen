@@ -35,7 +35,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     this._adhanScheduler,
   ) {
     WidgetsBinding.instance.addObserver(this);
-
     _adhanScheduler.addListener(notifyListeners);
 
     _loadCachedTimes();
@@ -44,11 +43,8 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(seconds: 3), () {
         if (!_prayerService.hasValidCacheForToday()) {
-          // ✅ مفيش كاش صالح ليوم النهارده → محتاجين GPS + API
           unawaited(fetchPrayerTimes());
         } else {
-          // ✅ عندنا كاش صالح → مش محتاجين GPS على الفاضي
-          // بس نتأكد إن المستخدم مش سافر لمكان جديد (أكتر من ~50 كيلو)
           unawaited(_checkIfLocationChangedSignificantly());
         }
       });
@@ -56,15 +52,10 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   PrayerTimes? get todayTimes => _todayTimes;
-
   bool get isLoading => _isLoading;
-
   String? get errorMessage => _errorMessage;
-
   bool get isOfflineUsingCache => _isOfflineUsingCache;
-
   String? get cityName => _cityName;
-
   bool get isValid =>
       _todayTimes != null && _todayTimes!.isValidChronologically();
 
@@ -90,13 +81,8 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// ✅ تتأكد إن المستخدم مش سافر أكتر من ~50 كيلو من الكاش المحفوظ.
-  /// لو اتحرك → تجيب بيانات جديدة. لو في نفس المكان → مش بتعمل حاجة.
-  /// بتشتغل في الـ background بهدوء بدون أي loading indicator.
   Future<void> _checkIfLocationChangedSignificantly() async {
     final cached = _prayerService.getCachedPrayerTimes();
-
-    // لو الكاش مش فيه إحداثيات → مش نقدر نقارن
     if (cached?.latitude == null || cached?.longitude == null) return;
 
     try {
@@ -105,22 +91,14 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       final latDiff = (cached!.latitude! - position.latitude).abs();
       final lngDiff = (cached.longitude! - position.longitude).abs();
 
-      // ~0.5 درجة ≈ 55 كيلو
-      // لو المستخدم اتحرك أكتر من كده → اجلب بيانات جديدة بالموقع الجديد
       if (latDiff > 0.5 || lngDiff > 0.5) {
         developer.log(
-          'Location changed significantly (Δlat=$latDiff, Δlng=$lngDiff). Fetching new prayer times.',
+          'Location changed significantly. Fetching new prayer times.',
           name: 'PrayerController',
         );
         unawaited(fetchPrayerTimes(force: true));
-      } else {
-        developer.log(
-          'Location unchanged. Using cached prayer times.',
-          name: 'PrayerController',
-        );
       }
     } catch (e) {
-      // لو GPS فشل → ابقى على الكاش بهدوء، مفيش error للمستخدم
       developer.log(
         'Location check failed (using cache): $e',
         name: 'PrayerController',
@@ -130,7 +108,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
 
   void _startDayChangeTimer() {
     _dayChangeTimer?.cancel();
-
     _dayChangeTimer = Timer.periodic(
       const Duration(minutes: 5),
       (_) => _checkDayChange(),
@@ -139,13 +116,11 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
 
   void _checkDayChange() {
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
     if (_todayTimes != null && _todayTimes!.date != todayStr) {
       developer.log(
         'Calendar day changed. Fetching new prayer times.',
         name: 'PrayerController',
       );
-
       unawaited(fetchPrayerTimes(force: true));
     }
   }
@@ -154,27 +129,20 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       developer.log(
-        'App resumed - checking and fetching prayer times.',
+        'App resumed - checking prayer times.',
         name: 'PrayerController',
       );
 
       _checkDayChange();
 
+      // ✅ FIX: إزالة scheduleNextAdhan من هنا.
+      // AdhanScheduler عنده didChangeAppLifecycleState خاص بيه
+      // وبيعمل reschedule لوحده عند الـ resume.
+      // لو استدعيناه هنا كمان → إشعاران للأذان بسبب double scheduling.
       if (!_prayerService.hasValidCacheForToday()) {
         unawaited(fetchPrayerTimes());
-      } else {
-        final todayCache = _prayerService.getCachedPrayerTimes();
-        final tomorrowCache = _prayerService.getCachedTomorrowPrayerTimes();
-
-        if (todayCache != null && todayCache.isValidChronologically()) {
-          unawaited(
-            _adhanScheduler.scheduleNextAdhan(
-              todayCache,
-              tomorrowPrayerTimes: tomorrowCache,
-            ),
-          );
-        }
       }
+      // لو عندنا كاش صالح → AdhanScheduler هيتولى الأمر بنفسه.
     }
   }
 
@@ -254,7 +222,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
 
     if (_prayerService.hasValidCacheForToday()) {
       final todayCache = _prayerService.getCachedPrayerTimes();
-
       _todayTimes = todayCache;
       _isOfflineUsingCache = true;
 
@@ -264,7 +231,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
           tomorrowPrayerTimes: tomorrowCache,
         ),
       );
-
       return;
     }
 
@@ -332,12 +298,10 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
 
           if (city != null && city.isNotEmpty) {
             _cityName = city;
-
             developer.log(
               'City ($locale): $_cityName',
               name: 'PrayerController',
             );
-
             notifyListeners();
             return;
           }
@@ -347,7 +311,6 @@ class PrayerController extends ChangeNotifier with WidgetsBindingObserver {
       _fallbackCityFromTimezone();
     } catch (e) {
       developer.log('City name fetch failed: $e', name: 'PrayerController');
-
       _fallbackCityFromTimezone();
     }
   }

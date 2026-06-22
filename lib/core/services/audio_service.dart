@@ -1,3 +1,5 @@
+// lib/core/services/audio_service.dart
+
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:audio_service/audio_service.dart';
@@ -133,8 +135,15 @@ class AudioServiceWrapper {
         config: const AudioServiceConfig(
           androidNotificationChannelId: 'com.islamicaudiohub.channel.audio',
           androidNotificationChannelName: 'Islamic Audio Hub Playback',
-          androidNotificationOngoing: true,
-          androidShowNotificationBadge: true,
+
+          // ✅ FIX: كان true → بيخلي إشعار دايم في الـ status bar حتى لما مفيش موسيقى
+          // ده كان السبب إن المستخدم يشوف التطبيق عند غلق الشاشة.
+          // false → الإشعار بيظهر بس لما في صوت شغال فعلاً.
+          androidNotificationOngoing: false,
+
+          // ✅ FIX: إخفاء الـ badge لما مفيش شيء شغال
+          androidShowNotificationBadge: false,
+          androidStopForegroundOnPause: true,
         ),
       );
       _isInitialized = true;
@@ -157,13 +166,9 @@ class AudioServiceWrapper {
   void _attachListeners() {
     _handler!.player.playerStateStream.listen((playerState) {
       final isPlaying = playerState.playing;
-
       if (currentState.isPlaying != isPlaying) {
         _stateSubject.add(currentState.copyWith(isPlaying: isPlaying));
       }
-
-      // NOTE: Adhan completion is now handled by AdhanPlayer's onComplete
-      // callback in AdhanScheduler — no longer handled here.
     });
 
     _handler!.player.playbackEventStream.listen(
@@ -260,19 +265,10 @@ class AudioServiceWrapper {
     }
   }
 
-  // ── ADHAN LOCK/UNLOCK ────────────────────────────────────────────────────
-  // Adhan audio is played by AdhanPlayer (not AudioService).
-  // These methods only manage the locked state so Quran/Radio
-  // cannot interrupt the adhan.
-
-  /// Lock the audio service for adhan playback.
-  /// Stops any running Quran / Radio and marks state as adhan-locked.
-  /// Actual audio is played by AdhanPlayer.
   void lockForAdhan(String arabicPrayerName) {
     _generation++;
     _queue = Future.value();
 
-    // Stop any running Quran/Radio from AudioService
     if (isAvailable && currentState.isPlaying) {
       try {
         _handler!.stop();
@@ -282,7 +278,7 @@ class AudioServiceWrapper {
     _stateSubject.add(
       AudioState(
         mode: AudioMode.adhan,
-        isPlaying: true, // visual indicator in UI
+        isPlaying: true,
         isLocked: true,
         currentSource: arabicPrayerName,
         displayTitle: arabicPrayerName,
@@ -296,7 +292,6 @@ class AudioServiceWrapper {
     );
   }
 
-  /// Unlock after adhan finishes. Resets state to idle.
   void unlockFromAdhan() {
     _stateSubject.add(
       const AudioState(
@@ -313,8 +308,6 @@ class AudioServiceWrapper {
     );
   }
 
-  // ── PLAY (Quran / Radio only) ─────────────────────────────────────────────
-
   Future<void> play(
     String url,
     AudioMode targetMode, {
@@ -325,11 +318,9 @@ class AudioServiceWrapper {
     if (!isAvailable) {
       return Future.error(AudioServiceException(AudioError.serviceUnavailable));
     }
-    // Reject if locked (adhan in progress)
     if (currentState.isLocked) {
       return Future.error(Exception('Audio locked during Adhan.'));
     }
-    // Adhan must now use lockForAdhan() + AdhanPlayer, not play()
     assert(
       targetMode != AudioMode.adhan,
       'Use lockForAdhan() + AdhanPlayer.play() for adhan mode.',
@@ -390,7 +381,6 @@ class AudioServiceWrapper {
     _generation++;
     _queue = Future.value();
 
-    // Also stop AdhanPlayer if adhan is in progress
     if (currentState.mode == AudioMode.adhan) {
       await AdhanPlayer.stop();
     }

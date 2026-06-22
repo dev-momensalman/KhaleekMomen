@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:islamic_audio_hub/core/services/http_service.dart';
 import 'package:islamic_audio_hub/core/services/storage_service.dart';
 import 'package:islamic_audio_hub/data/models/prayer_times.dart';
+import 'package:islamic_audio_hub/data/models/prayer_calculation_method.dart';
 
 class PrayerService {
   final HttpService _httpService;
@@ -61,8 +62,9 @@ class PrayerService {
     // 1. Try fetching from network API
     try {
       // Method 5 = Egyptian General Survey Authority (الهيئة المصرية العامة للمساحة)
+      final methodId = _storageService.getPrayerCalculationMethod();
       final path =
-          '/timings/$apiDateStr?latitude=$latitude&longitude=$longitude&method=5';
+          '/timings/$apiDateStr?latitude=$latitude&longitude=$longitude&method=$methodId';
       final response = await _httpService.get(path);
 
       if (response != null && response['data'] != null) {
@@ -205,8 +207,9 @@ class PrayerService {
     }
 
     try {
+      final methodId = _storageService.getPrayerCalculationMethod();
       final path =
-          '/timings/$apiDateStr?latitude=$latitude&longitude=$longitude&method=5';
+          '/timings/$apiDateStr?latitude=$latitude&longitude=$longitude&method=$methodId';
       final response = await _httpService.get(path);
       if (response != null && response['data'] != null) {
         final timings = response['data']['timings'] as Map<String, dynamic>;

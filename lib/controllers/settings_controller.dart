@@ -11,6 +11,7 @@ import 'package:islamic_audio_hub/core/services/storage_service.dart';
 import 'package:islamic_audio_hub/data/models/adhan_sound_option.dart';
 import 'package:islamic_audio_hub/data/models/audio_state.dart';
 import 'package:islamic_audio_hub/data/models/prayer_times.dart';
+import 'package:islamic_audio_hub/data/models/prayer_calculation_method.dart';
 
 class SettingsController extends ChangeNotifier {
   final StorageService _storageService;
@@ -35,9 +36,44 @@ class SettingsController extends ChangeNotifier {
     this._audioService,
   ) {
     _loadSettings();
+
     _listenToAudioState();
   }
+  PrayerCalculationMethod _calculationMethod = PrayerCalculationMethod.egyptian;
 
+  PrayerCalculationMethod get calculationMethod => _calculationMethod;
+  List<PrayerCalculationMethod> get availableMethods =>
+      PrayerCalculationMethod.values;
+
+      Future<void> updateCalculationMethod(PrayerCalculationMethod method) async {
+  if (_calculationMethod == method) return;
+  _calculationMethod = method;
+  await _storageService.setPrayerCalculationMethod(method.id);
+  notifyListeners();
+
+  // مسح الكاش القديم عشان يجيب أوقات جديدة بالطريقة الجديدة
+  await _storageService.delete('cached_prayer_times');
+  await _storageService.delete('cached_prayer_times_tomorrow');
+
+  developer.log(
+    'Calculation method changed to: ${method.nameEn} (id=${method.id})',
+    name: 'SettingsController',
+  );
+}
+int _adhanOffsetMinutes = 0;
+
+int get adhanOffsetMinutes => _adhanOffsetMinutes;
+
+// في _loadSettings():
+_adhanOffsetMinutes = _storageService.getAdhanOffsetMinutes();
+
+// دالة جديدة:
+Future<void> updateAdhanOffsetMinutes(int minutes) async {
+  _adhanOffsetMinutes = minutes;
+  await _storageService.setAdhanOffsetMinutes(minutes);
+  notifyListeners();
+  await _rescheduleAdhanFromCache(reason: 'adhan offset changed to ${minutes}min');
+}
   void _listenToAudioState() {
     _audioSubscription = _audioService.stateStream.listen((state) {
       final isNowPreviewing =
@@ -78,8 +114,8 @@ class SettingsController extends ChangeNotifier {
   bool get isTestingNativeAdhan => _isTestingNativeAdhan;
 
   void _loadSettings() {
-    final themeStr = _storageService.getThemeMode();
-    _themeMode = _parseThemeMode(themeStr);
+    final methodId = _storageService.getPrayerCalculationMethod();
+    _calculationMethod = PrayerCalculationMethod.fromId(methodId);
 
     final langStr = _storageService.getLanguage();
     _locale = Locale(langStr);

@@ -221,6 +221,8 @@ class AdhanScheduler extends ChangeNotifier with WidgetsBindingObserver {
     PrayerTimes prayerTimes, {
     PrayerTimes? tomorrowPrayerTimes,
   }) {
+
+    
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));

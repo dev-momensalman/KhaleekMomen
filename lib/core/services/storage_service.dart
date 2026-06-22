@@ -22,6 +22,12 @@ class StorageService {
     }
   }
 
+  int getAdhanOffsetMinutes() =>
+      get('adhan_offset_minutes', defaultValue: 0) as int;
+
+  Future<void> setAdhanOffsetMinutes(int minutes) =>
+      put('adhan_offset_minutes', minutes);
+
   // Core API Methods
   dynamic get(String key, {dynamic defaultValue}) {
     return _box.get(key, defaultValue: defaultValue);
@@ -160,5 +166,14 @@ class StorageService {
   /// Clears the saved reading position (e.g. user finishes a surah).
   Future<void> clearLastReadingPosition() async {
     await delete('last_reading_position');
+  }
+
+  // ── Prayer Calculation Method ─────────────────────────────────────────
+  int getPrayerCalculationMethod() {
+    return get('prayer_calc_method', defaultValue: 5) as int;
+  }
+
+  Future<void> setPrayerCalculationMethod(int methodId) async {
+    await put('prayer_calc_method', methodId);
   }
 }
