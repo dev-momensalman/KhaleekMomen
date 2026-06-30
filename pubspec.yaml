@@ -1,7 +1,7 @@
 name: islamic_audio_hub
 description: "خليك مؤمن — تطبيق إسلامي شامل لمواقيت الصلاة والأذان والقرآن والراديو الإسلامي"
 publish_to: 'none'
-version: 1.0.0+4
+version: 1.0.0+5
 
 environment:
   sdk: ^3.9.2
